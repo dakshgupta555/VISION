@@ -29,9 +29,22 @@ function Panel({ title, children, className = "" }) {
 }
 
 // ---------------------------------------------------------------- 1. header
+const ttt = (x) => (x.already_above ? "exceeded" : x.minutes !== null ? `${fmt(x.minutes, 0)} min` : "none");
+
+function HeadStat({ label, value, unit = "", tone = "" }) {
+  return (
+    <div className="text-right">
+      <div className="text-[10px] uppercase tracking-widest text-dim">{label}</div>
+      <div className={`num text-xl ${tone}`}>{value}<span className="text-dim text-xs">{unit}</span></div>
+    </div>
+  );
+}
+
 function Header({ s, scenarios, scenario, setScenario }) {
   const lvl = s.status.level;
   const label = { ok: "NORMAL", warn: "ATTENTION", alarm: "ALARM" }[lvl];
+  const active = s.alerts_live.filter((a) => a.kind !== "fixed_trip").length;
+  const fixedOn = s.alerts_live.some((a) => a.kind === "fixed_trip");
   return (
     <header className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 border-b border-edge">
       <div>
@@ -42,11 +55,17 @@ function Header({ s, scenarios, scenario, setScenario }) {
       </div>
       <div className={`border rounded px-3 py-1 font-semibold tracking-wider ${LEVEL[lvl]}`}>{label}</div>
       <div className="num text-sm text-dim">{s.timestamp.replace("T", " ")}</div>
-      <div className="ml-auto flex items-center gap-4">
-        <div className="text-right">
-          <div className="text-[10px] uppercase tracking-widest text-dim">Health index</div>
-          <div className="num text-2xl">{fmt(s.health.index, 0)}<span className="text-dim text-sm">/100</span></div>
-        </div>
+      <div className="ml-auto flex flex-wrap items-center gap-5">
+        <HeadStat label="Health index" value={fmt(s.health.index, 0)} unit="/100" />
+        <HeadStat label="Hot-spot" value={fmt(s.readings.hotspot_c)} unit="°C"
+          tone={s.readings.hotspot_c > s.countdown.hotspot.limit_c ? "text-alarm" : ""} />
+        <HeadStat label="Loading" value={fmt(s.readings.load_pct, 0)} unit="%"
+          tone={s.readings.load_pct > 100 ? "text-alarm" : ""} />
+        <HeadStat label={`Time to hot-spot ${s.countdown.hotspot.limit_c} °C`} value={ttt(s.countdown.hotspot)}
+          tone={s.countdown.hotspot.already_above ? "text-alarm" : s.countdown.hotspot.minutes !== null ? "text-warn" : ""} />
+        <HeadStat label={`Device ${s.countdown.fixed.limit_c} °C trip`} value={ttt(s.countdown.fixed)} tone="text-dim" />
+        <HeadStat label="Active alerts" value={active} unit={fixedOn ? " +60 °C ref" : ""}
+          tone={active ? LEVEL[lvl].split(" ")[0] : "text-ok"} />
         <select className="bg-ink border border-edge rounded px-2 py-1 text-sm" value={scenario}
           onChange={(e) => setScenario(e.target.value)}>
           {scenarios.map((n) => <option key={n}>{n}</option>)}
