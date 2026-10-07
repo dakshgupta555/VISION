@@ -1,0 +1,78 @@
+
+==========================================================================================
+[IN-SAMPLE] SHOWCASE - per fault event
+==========================================================================================
+                   fault family     start  hours  detected  latency_h  diag_post%  diag_all%  family_post%  exact_post%  wrongfam% sev@det%  resid@det_sd  clear_h
+     cooling_degradation  asset d21 00:15  144.0      True      27.75        96.6       78.0          96.6          NaN        0.0     29.2           3.1    23.75
+                overload  asset d13 15:00    4.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+                overload  asset d14 15:00    5.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+sensor_bias:ambient_temp sensor d04 00:00   48.2      True      25.00       100.0       48.2         100.0          0.0        0.0     step           7.5     0.75
+          sensor_dead:IB sensor d28 02:00    3.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+   sensor_drift:oil_temp sensor d16 00:00   72.2      True      27.00       100.0       62.6         100.0          0.0        0.0     42.5           4.9     0.75
+         sensor_stuck:IY sensor d23 09:00    5.2      True       0.25       100.0       95.2         100.0          NaN        NaN     step           NaN     0.00
+        unbalance_growth  asset d08 00:15   96.0      True      21.50        88.3       68.5          88.3          NaN        1.0     28.5           NaN     0.25
+
+==========================================================================================
+[IN-SAMPLE] SHOWCASE - clean samples
+==========================================================================================
+  clean samples                          1387
+  alarm-clear latency (after a fault)    102 samples - see clear_h per event
+  FALSE ALARMS, genuinely clean          0.00%  (0 episodes, 0.00/day)
+
+==========================================================================================
+[IN-SAMPLE] SHOWCASE - cooling fault lead time
+==========================================================================================
+  fault onset                        21 Apr 00:15
+  first oil > 60 C in fault window   21 Apr 09:45  (onset + 9.5 h)
+  first cooling alarm                22 Apr 04:00  (onset + 27.8 h)   fault excess then 1.35 K
+  fault adds +3 K                    22 Apr 18:15  (onset + 42.0 h)
+  fault adds +5 K                    23 Apr 12:15  (onset + 60.0 h)
+
+==========================================================================================
+[IN-SAMPLE] ALL EVENTS
+==========================================================================================
+          scenario                    fault family     start  hours  detected  latency_h  diag_post%  diag_all%  family_post%  exact_post%  wrongfam% sev@det%  resid@det_sd  clear_h
+          showcase      cooling_degradation  asset d21 00:15  144.0      True      27.75        96.6       78.0          96.6          NaN        0.0     29.2           3.1    23.75
+          showcase                 overload  asset d13 15:00    4.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+          showcase                 overload  asset d14 15:00    5.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+          showcase sensor_bias:ambient_temp sensor d04 00:00   48.2      True      25.00       100.0       48.2         100.0          0.0        0.0     step           7.5     0.75
+          showcase           sensor_dead:IB sensor d28 02:00    3.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+          showcase    sensor_drift:oil_temp sensor d16 00:00   72.2      True      27.00       100.0       62.6         100.0          0.0        0.0     42.5           4.9     0.75
+          showcase          sensor_stuck:IY sensor d23 09:00    5.2      True       0.25       100.0       95.2         100.0          NaN        NaN     step           NaN     0.00
+          showcase         unbalance_growth  asset d08 00:15   96.0      True      21.50        88.3       68.5          88.3          NaN        1.0     28.5           NaN     0.25
+     cooling_fault      cooling_degradation  asset d15 00:15  383.8      True      29.75       100.0       92.2         100.0          NaN        0.0     31.3           4.2     0.00
+   summer_overload                 overload  asset d11 13:00    6.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+   summer_overload                 overload  asset d12 13:00    7.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+   summer_overload                 overload  asset d13 14:00    6.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+    sensor_trouble           sensor_dead:IB sensor d26 02:00    4.2      True       0.00       100.0      100.0         100.0          NaN        0.0     step           NaN     0.00
+    sensor_trouble    sensor_drift:oil_temp sensor d09 00:00  528.0      True      39.00        99.4       92.0          99.4          0.0        0.0     29.9           4.9     0.00
+    sensor_trouble          sensor_stuck:IY sensor d21 00:00    9.2      True       0.25       100.0       97.3         100.0          NaN        0.0     step           NaN     0.00
+         unbalance         unbalance_growth  asset d07 00:15  575.8      True      19.00        99.8       96.5          99.8          NaN        0.2      9.2           NaN     0.00
+          oil_loss                 oil_loss  asset d13 00:15  431.8      True      50.75        98.4       86.9          98.4          NaN        0.0     30.4           2.7     0.00
+winter_250kva_5min      cooling_degradation  asset d15 00:05  383.9      True      25.92        99.2       92.5          99.2          NaN        0.0     27.1           4.8     0.00
+
+==========================================================================================
+[IN-SAMPLE] PER SCENARIO
+==========================================================================================
+          scenario  kVA events  diag_post%  wrongfam%  FA%  FA ep/day
+          showcase  100    8/8        98.1        0.1  0.0        0.0
+           healthy  100    0/0         NaN        NaN  0.0        0.0
+     cooling_fault  100    1/1       100.0        0.0  0.0        0.0
+   summer_overload  100    3/3       100.0        0.0  0.0        0.0
+    sensor_trouble  100    3/3        99.8        0.0  0.0        0.0
+         unbalance  100    1/1        99.8        0.2  0.0        0.0
+          oil_loss  100    1/1        98.4        0.0  0.0        0.0
+winter_250kva_5min  250    1/1        99.2        0.0  0.0        0.0
+
+==========================================================================================
+[IN-SAMPLE] HEADLINE
+==========================================================================================
+  events detected                    18 / 18
+  severity at detection (ramped)     median 30%, range 9-42%  (n=8)
+  residual at detection (thermal)    median 4.8 sd, range 2.7-7.5  (n=7)
+  latency, hours (secondary)         median 9.6 h
+  diagnosis, post-detection          99.0%  (whole window 89.4%)
+  family, post-detection             99.0%
+  wrong-family alarms                0.07% of fault samples
+  false alarms, genuinely clean      0.00% of samples, 0 episodes in 240 days (0.00/day)
+  alarm-clear latency                median 0.0 h, max 23.8 h

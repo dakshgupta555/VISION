@@ -1,0 +1,183 @@
+{
+  "ho_fast_mild_cooling": {
+    "rating_kva": 100,
+    "config": {
+      "seed": 2001,
+      "sample_minutes": 10,
+      "season": "spring",
+      "load_profile": "residential"
+    },
+    "faults": [
+      {
+        "kind": "cooling_degradation",
+        "family": "asset",
+        "start_h": 240,
+        "end_h": 480,
+        "severity": 0.18,
+        "channel": null,
+        "ramp_h": 24,
+        "label": "Cooling path degrading"
+      }
+    ]
+  },
+  "ho_overlap_cooling_drift": {
+    "rating_kva": 100,
+    "config": {
+      "seed": 2002,
+      "season": "summer",
+      "load_profile": "mixed"
+    },
+    "faults": [
+      {
+        "kind": "cooling_degradation",
+        "family": "asset",
+        "start_h": 192,
+        "end_h": 528,
+        "severity": 0.45,
+        "channel": null,
+        "ramp_h": 140,
+        "label": "Cooling path degrading"
+      },
+      {
+        "kind": "sensor_drift",
+        "family": "sensor",
+        "start_h": 288,
+        "end_h": 384,
+        "severity": 3.5,
+        "channel": "oil_temp",
+        "ramp_h": 30,
+        "label": "oil_temp drifting"
+      }
+    ]
+  },
+  "ho_63kva_oilloss": {
+    "rating_kva": 63,
+    "config": {
+      "seed": 2003,
+      "season": "monsoon",
+      "load_profile": "commercial"
+    },
+    "faults": [
+      {
+        "kind": "oil_loss",
+        "family": "asset",
+        "start_h": 144,
+        "end_h": null,
+        "severity": 0.2,
+        "channel": null,
+        "ramp_h": 200,
+        "label": "Oil level falling"
+      },
+      {
+        "kind": "sensor_stuck",
+        "family": "sensor",
+        "start_h": 442,
+        "end_h": 448,
+        "severity": 1.0,
+        "channel": "oil_temp",
+        "ramp_h": 0.0,
+        "label": "oil_temp frozen"
+      },
+      {
+        "kind": "sensor_dead",
+        "family": "sensor",
+        "start_h": 600,
+        "end_h": 603,
+        "severity": 1.0,
+        "channel": "IR",
+        "ramp_h": 0.0,
+        "label": "IR dead"
+      }
+    ]
+  },
+  "ho_160kva_30min": {
+    "rating_kva": 160,
+    "config": {
+      "seed": 2004,
+      "sample_minutes": 30,
+      "season": "winter",
+      "load_profile": "agricultural"
+    },
+    "faults": [
+      {
+        "kind": "unbalance_growth",
+        "family": "asset",
+        "start_h": 120,
+        "end_h": 288,
+        "severity": 0.14,
+        "channel": "IB",
+        "ramp_h": 36,
+        "label": "Phase unbalance growing"
+      },
+      {
+        "kind": "sensor_bias",
+        "family": "sensor",
+        "start_h": 384,
+        "end_h": 456,
+        "severity": 2.5,
+        "channel": "ambient_temp",
+        "ramp_h": 0.0,
+        "label": "ambient_temp offset"
+      },
+      {
+        "kind": "overload",
+        "family": "asset",
+        "start_h": 545,
+        "end_h": 549,
+        "severity": 1.1,
+        "channel": null,
+        "ramp_h": 0.0,
+        "label": "Sustained overload"
+      }
+    ]
+  },
+  "ho_drift_ambient_vt": {
+    "rating_kva": 100,
+    "config": {
+      "seed": 2005,
+      "season": "summer",
+      "peak_load_pu": 0.85
+    },
+    "faults": [
+      {
+        "kind": "sensor_drift",
+        "family": "sensor",
+        "start_h": 96,
+        "end_h": 240,
+        "severity": -4.5,
+        "channel": "ambient_temp",
+        "ramp_h": 90,
+        "label": "ambient_temp drifting"
+      },
+      {
+        "kind": "sensor_dead",
+        "family": "sensor",
+        "start_h": 336,
+        "end_h": 342,
+        "severity": 1.0,
+        "channel": "VR",
+        "ramp_h": 0.0,
+        "label": "VR dead"
+      },
+      {
+        "kind": "cooling_degradation",
+        "family": "asset",
+        "start_h": 432,
+        "end_h": 624,
+        "severity": 0.6,
+        "channel": null,
+        "ramp_h": 60,
+        "label": "Cooling path degrading"
+      }
+    ]
+  },
+  "ho_healthy_25kva": {
+    "rating_kva": 25,
+    "config": {
+      "seed": 2006,
+      "season": "monsoon",
+      "load_profile": "commercial"
+    },
+    "faults": []
+  }
+}
