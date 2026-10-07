@@ -87,6 +87,10 @@ class ValidationConfig:
     intercept_limit_k: float = 2.0
     persist_fits: int = 3               # consecutive fits before an alarm stands
     attribution_h: float = 24.0         # look-back beyond the fit window for a step
+    split_test: bool = False            # OFF: failed pre-registered rule 4, see results/prereg_split_step.md
+    split_min_side_h: float = 3.0
+    split_min_k: float = 1.5
+    split_z: float = 6.0
 
     # ---- loading ------------------------------------------------------------
     overload_pu: float = 1.0
@@ -295,18 +299,27 @@ def rolling_rise_fit(index, pred_rise, meas_rise, valid, cfg: ValidationConfig,
     t_days = (index - index[0]).total_seconds().values / 86400.0
     rows = []
     huber = HuberRegressor(alpha=0.0, max_iter=200)
+    split_reset = -1
     for ts in times:
         lo = index.searchsorted(ts - win, side="right")
         hi = index.searchsorted(ts, side="right")
         r = reset_pos[(reset_pos >= lo) & (reset_pos < hi)]
         if len(r):
             lo = int(r[-1])
+        lo = max(lo, split_reset)
         m = valid[lo:hi]
         x, y = pred_rise[lo:hi][m], meas_rise[lo:hi][m]
         tt = t_days[lo:hi][m] - t_days[hi - 1]
+        split = None
+        if cfg.split_test and len(x) >= cfg.fit_min_points:
+            split = _split_step(x, y, tt, cfg)
+        if split is not None:
+            keep = tt > split
+            split_reset = int(np.arange(lo, hi)[m][np.argmax(keep)])
+            x, y, tt = x[keep], y[keep], tt[keep]
         rec = {"fit_time": ts, "slope": np.nan, "intercept": np.nan,
-               "drift_k_per_day": np.nan, "n": int(m.sum())}
-        if m.sum() >= cfg.fit_min_points and np.std(x) >= cfg.fit_min_spread_k:
+               "drift_k_per_day": np.nan, "n": len(x), "split_step": split is not None}
+        if len(x) >= cfg.fit_min_points and np.std(x) >= cfg.fit_min_spread_k:
             try:
                 huber.fit(np.column_stack([x, tt]), y)
                 rec["slope"] = float(huber.coef_[0])
@@ -340,6 +353,33 @@ def rolling_rise_fit(index, pred_rise, meas_rise, valid, cfg: ValidationConfig,
             status[i] = r
     fits["status"] = status
     return fits
+
+
+def _split_step(x, y, tt, cfg):
+    """Look for an offset step inside the window that a single fit would
+    straddle and alias into the slope. Scans split points, fitting
+
+        y = a*x + b + c*t + S*[t > tau]
+
+    and returns the split time if the best step is both large and certain."""
+    side = cfg.split_min_side_h / 24.0
+    cands = np.arange(tt.min() + side, tt.max() - side, 1.0 / 24.0)
+    best_z, best_tau, best_s = 0.0, None, 0.0
+    base = np.column_stack([x, np.ones_like(x), tt])
+    for tau in cands:
+        X = np.column_stack([base, (tt > tau).astype(float)])
+        coef, res, rank, _ = np.linalg.lstsq(X, y, rcond=None)
+        if rank < 4:
+            continue
+        resid = y - X @ coef
+        sd = np.sqrt(resid @ resid / max(len(y) - 4, 1))
+        se = sd * np.sqrt(np.linalg.inv(X.T @ X)[3, 3])
+        z = abs(coef[3]) / se if se > 0 else 0.0
+        if z > best_z:
+            best_z, best_tau, best_s = z, tau, coef[3]
+    if best_tau is not None and best_z >= cfg.split_z and abs(best_s) >= cfg.split_min_k:
+        return best_tau
+    return None
 
 
 def attribute_offsets(fits, index, steps, cfg: ValidationConfig):

@@ -33,3 +33,21 @@ PASS -> freeze, commit, generate a fresh held-out set (seeds 5001+, at least
 two overlap cases), score once.
 FAIL -> keep 6-sigma single-difference; docs/results.md states that a missed step
 can cause a wrong-family alarm.
+
+## Outcome — FAIL (rule 4)
+
+| Rule | Baseline 370b0b3 | Split test | Result |
+|---|---|---|---|
+| 1. Wrong-family cooling samples, bias cases | 630 | 216 (-66%) | PASS |
+| 2. Healthy false-alarm samples | 4 | 4 | PASS |
+| 3. Asset cases: detected / sev@det median / wrong-family | 6/6, 40.3%, 0 | 6/6, 40.3%, 0 | PASS |
+| 4. In-sample false alarms | 0.00% | 0.16% (1 episode) | **FAIL** |
+
+The failing episode is on showcase: restarting the window after the day-27
+cooling clean-out and after the ambient-bias end breaks a continuous
+alarm-clear run, and the re-fire is then counted as a false alarm. Side effect
+worth knowing: maximum alarm-clear latency fell from 23.8 h to 4.8 h.
+
+Per this file, the test is disabled (`split_test=False`), leaving the detector
+behaviour identical to 370b0b3. Re-enabling it needs a new pre-registration
+and a fresh held-out set.
