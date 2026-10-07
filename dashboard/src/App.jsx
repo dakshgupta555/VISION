@@ -1,0 +1,317 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
+
+// Six zones: status header, live gauges, trends, health breakdown, alert feed,
+// recommendations. A replay cursor drives all of them: the twin answers as of
+// the selected instant, using only data up to it.
+
+const api = (path) => fetch(`/api/${path}`).then((r) => {
+  if (!r.ok) throw new Error(`${r.status} ${path}`);
+  return r.json();
+});
+
+const LEVEL = {
+  ok: "text-ok border-ok", warn: "text-warn border-warn", alarm: "text-alarm border-alarm",
+  info: "text-dim border-edge",
+};
+const fmt = (v, d = 1) => (v === null || v === undefined ? "—" : Number(v).toFixed(d));
+const hhmm = (iso) => iso?.slice(5, 16).replace("T", " ");
+
+function Panel({ title, children, className = "" }) {
+  return (
+    <section className={`bg-panel border border-edge rounded-md p-3 ${className}`}>
+      <h2 className="text-[11px] uppercase tracking-widest text-dim mb-2">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------- 1. header
+function Header({ s, scenarios, scenario, setScenario }) {
+  const lvl = s.status.level;
+  const label = { ok: "NORMAL", warn: "ATTENTION", alarm: "ALARM" }[lvl];
+  return (
+    <header className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 border-b border-edge">
+      <div>
+        <div className="text-lg font-semibold">{s.nameplate.tag}</div>
+        <div className="text-xs text-dim num">
+          {s.nameplate.rating_kva} kVA · {s.nameplate.hv_kv} kV / {s.nameplate.lv_v} V · {s.nameplate.cooling}
+        </div>
+      </div>
+      <div className={`border rounded px-3 py-1 font-semibold tracking-wider ${LEVEL[lvl]}`}>{label}</div>
+      <div className="num text-sm text-dim">{s.timestamp.replace("T", " ")}</div>
+      <div className="ml-auto flex items-center gap-4">
+        <div className="text-right">
+          <div className="text-[10px] uppercase tracking-widest text-dim">Health index</div>
+          <div className="num text-2xl">{fmt(s.health.index, 0)}<span className="text-dim text-sm">/100</span></div>
+        </div>
+        <select className="bg-ink border border-edge rounded px-2 py-1 text-sm" value={scenario}
+          onChange={(e) => setScenario(e.target.value)}>
+          {scenarios.map((n) => <option key={n}>{n}</option>)}
+        </select>
+      </div>
+    </header>
+  );
+}
+
+// ---------------------------------------------------------------- replay bar
+function Replay({ tl, i, n, setI, playing, setPlaying, speed, setSpeed }) {
+  const color = ["#1f2a37", "#f59e0b", "#ef4444"];
+  return (
+    <div className="px-4 py-2 border-b border-edge flex items-center gap-3">
+      <button className="border border-edge rounded px-3 py-1 text-sm w-20" onClick={() => setPlaying(!playing)}>
+        {playing ? "Pause" : "Play"}
+      </button>
+      <select className="bg-ink border border-edge rounded px-1 py-1 text-xs num" value={speed}
+        onChange={(e) => setSpeed(Number(e.target.value))}>
+        {[1, 4, 12, 48].map((x) => <option key={x} value={x}>{x}×</option>)}
+      </select>
+      <div className="flex-1 relative">
+        <div className="flex h-2 rounded overflow-hidden mb-1">
+          {tl?.level.map((l, k) => <div key={k} style={{ flex: 1, background: color[l] }} />)}
+        </div>
+        <input type="range" min={0} max={n - 1} value={i} className="w-full accent-cyan-400"
+          onChange={(e) => { setPlaying(false); setI(Number(e.target.value)); }} />
+      </div>
+      <button className="border border-edge rounded px-2 py-1 text-xs" onClick={() => setI(n - 1)}>Latest</button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------- 2. gauges
+function Tile({ label, value, unit, sub, tone }) {
+  return (
+    <div className="bg-ink border border-edge rounded p-2">
+      <div className="text-[10px] uppercase tracking-widest text-dim">{label}</div>
+      <div className={`num text-2xl ${tone || ""}`}>{value}<span className="text-sm text-dim ml-1">{unit}</span></div>
+      {sub && <div className="num text-[11px] text-dim">{sub}</div>}
+    </div>
+  );
+}
+
+function Gauges({ s }) {
+  const r = s.readings;
+  const chBad = Object.entries(r.channels).filter(([, v]) => !["ok", "step"].includes(v));
+  const res = Math.abs(r.residual_k ?? 0);
+  return (
+    <Panel title="Live readings">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <Tile label="Top oil" value={fmt(r.oil_c)} unit="°C" sub={`twin ${fmt(r.oil_pred_c)} °C`} />
+        <Tile label="Hot-spot" value={fmt(r.hotspot_c)} unit="°C" sub="measured oil + winding gradient"
+          tone={r.hotspot_c > 110 ? "text-alarm" : ""} />
+        <Tile label="Ambient" value={fmt(r.ambient_c)} unit="°C" sub={`oil rise ${fmt(r.rise_k)} K`} />
+        <Tile label="Residual" value={fmt(r.residual_k, 2)} unit="K" sub="measured − twin"
+          tone={res > 2 ? "text-warn" : ""} />
+        <Tile label="Load" value={fmt(r.load_pct, 0)} unit="%" sub={`worst phase ${fmt(r.load_worst_phase_pct, 0)} %`}
+          tone={r.load_pct > 100 ? "text-alarm" : ""} />
+        <Tile label="Current unbalance" value={fmt(r.current_unbalance_pct)} unit="%"
+          sub={`VUF ${fmt(r.voltage_unbalance_pct, 2)} %`} />
+        <Tile label="Ageing factor" value={fmt(r.faa, 2)} unit="pu" sub={`last 24 h: ${fmt(s.ageing_24h.equivalent_hours, 1)} h · ₹${fmt(s.ageing_24h.life_cost_inr, 0)}`}
+          tone={r.faa > 1 ? "text-alarm" : ""} />
+        <Tile label="Rise fit" value={fmt(r.slope, 3)} unit="slope" sub={`intercept ${fmt(r.intercept_k, 2)} K`}
+          tone={r.slope > 1.06 ? "text-alarm" : ""} />
+      </div>
+      <div className="mt-2 grid grid-cols-2 gap-2 num text-xs">
+        <div className="text-dim">I&nbsp; {["IR", "IY", "IB"].map((c) => `${c} ${fmt(r.currents_a[c])}`).join("  ")} A</div>
+        <div className="text-dim">V&nbsp; {["VR", "VY", "VB"].map((c) => `${c} ${fmt(r.voltages_v[c])}`).join("  ")} V</div>
+      </div>
+      <div className="mt-1 text-xs">
+        {chBad.length === 0
+          ? <span className="text-ok">All 8 channels trusted</span>
+          : chBad.map(([c, v]) => <span key={c} className="text-warn mr-3">{c}: {v}</span>)}
+      </div>
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- 3. trends
+function Trends({ series }) {
+  if (!series) return <Panel title="Trends">loading…</Panel>;
+  const data = series.t.map((t, k) => ({
+    t: hhmm(t), oil: series.oil_c[k], twin: series.pred_oil_c[k], hs: series.hotspot_c[k],
+    amb: series.ambient_c[k], res: series.residual_k[k], load: series.K_oil[k] && 100 * series.K_oil[k],
+  }));
+  const axis = { stroke: "#7d8a9a", fontSize: 10 };
+  const tip = { contentStyle: { background: "#121821", border: "1px solid #1f2a37", fontSize: 11 } };
+  return (
+    <Panel title="Trends · last 48 h">
+      <ResponsiveContainer width="100%" height={210}>
+        <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+          <CartesianGrid stroke="#1f2a37" />
+          <XAxis dataKey="t" tick={axis} minTickGap={40} />
+          <YAxis tick={axis} domain={["auto", "auto"]} />
+          <Tooltip {...tip} />
+          <ReferenceLine y={series.trip_c} stroke="#7d8a9a" strokeDasharray="4 4"
+            label={{ value: `fixed trip ${series.trip_c} °C`, fill: "#7d8a9a", fontSize: 10, position: "insideTopLeft" }} />
+          <Line dataKey="oil" name="oil measured" stroke="#22d3ee" dot={false} strokeWidth={1.6} isAnimationActive={false} />
+          <Line dataKey="twin" name="oil twin" stroke="#d7dee8" dot={false} strokeDasharray="3 3" isAnimationActive={false} />
+          <Line dataKey="hs" name="hot-spot" stroke="#94a3b8" dot={false} strokeWidth={1} isAnimationActive={false} />
+          <Line dataKey="amb" name="ambient" stroke="#475569" dot={false} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+      <div className="grid grid-cols-2 gap-2">
+        {[["res", "residual K (measured − twin)", [-4, 8]], ["load", "load %", [0, "auto"]]].map(([k, name, dom]) => (
+          <ResponsiveContainer key={k} width="100%" height={110}>
+            <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -18 }}>
+              <CartesianGrid stroke="#1f2a37" />
+              <XAxis dataKey="t" tick={axis} minTickGap={60} />
+              <YAxis tick={axis} domain={dom} />
+              <Tooltip {...tip} />
+              {k === "res" && <ReferenceLine y={0} stroke="#475569" />}
+              {k === "load" && <ReferenceLine y={100} stroke="#7d8a9a" strokeDasharray="4 4" />}
+              <Line dataKey={k} name={name} stroke="#22d3ee" dot={false} isAnimationActive={false} />
+            </LineChart>
+          </ResponsiveContainer>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- 4. health
+function Health({ h }) {
+  const tone = (sc) => (sc >= 80 ? "bg-ok" : sc >= 50 ? "bg-warn" : "bg-alarm");
+  return (
+    <Panel title="Health breakdown">
+      <div className="space-y-2">
+        {h.components.map((c) => (
+          <div key={c.key}>
+            <div className="flex justify-between text-xs">
+              <span>{c.label} <span className="text-dim">· w {c.weight}</span></span>
+              <span className="num">{fmt(c.value, 2)} {c.unit} → <b>{fmt(c.score, 0)}</b></span>
+            </div>
+            <div className="h-1.5 bg-ink rounded">
+              <div className={`h-1.5 rounded ${tone(c.score ?? 0)}`} style={{ width: `${c.score ?? 0}%` }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 text-[11px] text-dim">
+        Index = weighted mean of the scores. Each score is a physical value mapped linearly between its
+        “100” and “0” points (ageing on log₂, since it doubles every ~7 K).
+      </div>
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- 5. alerts
+function Alerts({ live, recent }) {
+  const liveKeys = new Set(live.map((a) => a.start + a.what));
+  const shown = [...live.filter((a) => a.kind === "fixed_trip"), ...recent];
+  return (
+    <Panel title="Alert feed" className="overflow-auto max-h-[420px]">
+      {shown.length === 0 && <div className="text-dim text-sm">No alerts.</div>}
+      <ul className="space-y-2">
+        {shown.map((a, k) => {
+          const on = liveKeys.has(a.start + a.what);
+          return (
+            <li key={k} className={`border-l-2 pl-2 ${LEVEL[a.level]} ${on ? "" : "opacity-50"}`}>
+              <div className="flex justify-between text-sm">
+                <span className="font-semibold">{a.what}</span>
+                <span className="num text-[11px] text-dim">{hhmm(a.start)}{on ? " · active" : ` → ${hhmm(a.end)}`}</span>
+              </div>
+              <div className="text-[11px] uppercase tracking-wider text-dim">{a.family}</div>
+              <div className="text-xs text-fg/80"><b className="text-dim">Why </b>{a.why}</div>
+              <div className="text-xs text-fg/80"><b className="text-dim">Do </b>{a.action}</div>
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- 6. recommendations
+function Recommendations({ s }) {
+  const { hotspot: h, fixed: f } = s.countdown;
+  const cdText = (x) => x.already_above ? "exceeded" : x.minutes !== null ? `${fmt(x.minutes, 0)} min` : "not reached";
+  return (
+    <Panel title="Recommendations">
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        <div className="bg-ink border border-edge rounded p-2">
+          <div className="text-[10px] uppercase tracking-widest text-dim">Twin limit · hot-spot {h.limit_c} °C</div>
+          <div className={`num text-xl ${h.already_above ? "text-alarm" : h.minutes !== null ? "text-warn" : "text-ok"}`}>{cdText(h)}</div>
+          <div className="num text-[11px] text-dim">settles {fmt(h.settles_at_c)} °C · safe load {fmt(100 * h.safe_load_pu, 0)} %</div>
+        </div>
+        <div className="bg-ink border border-edge rounded p-2">
+          <div className="text-[10px] uppercase tracking-widest text-dim">Existing device · oil {f.limit_c} °C</div>
+          <div className="num text-xl text-dim">{cdText(f)}</div>
+          <div className="num text-[11px] text-dim">ambient {fmt(s.countdown.ambient_c)} °C leaves {fmt(f.limit_c - s.countdown.ambient_c)} K of rise</div>
+        </div>
+      </div>
+      <ol className="space-y-2">
+        {s.recommendations.map((r, k) => (
+          <li key={k} className="text-sm">
+            <span className={`num mr-2 ${r.priority === 1 ? "text-alarm" : r.priority === 2 ? "text-warn" : "text-ok"}`}>P{r.priority}</span>
+            {r.text}
+            <div className="text-[11px] text-dim ml-7">{r.because}</div>
+          </li>
+        ))}
+      </ol>
+    </Panel>
+  );
+}
+
+// ---------------------------------------------------------------- app
+export default function App() {
+  const [scenarios, setScenarios] = useState([]);
+  const [scenario, setScenario] = useState("showcase");
+  const [tl, setTl] = useState(null);
+  const [i, setI] = useState(null);
+  const [s, setS] = useState(null);
+  const [series, setSeries] = useState(null);
+  const [err, setErr] = useState(null);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(4);
+  const inflight = useRef(false);
+
+  useEffect(() => { api("scenarios").then((d) => setScenarios(d.scenarios)).catch((e) => setErr(String(e))); }, []);
+
+  useEffect(() => {
+    setS(null); setSeries(null); setTl(null); setPlaying(false);
+    api(`${scenario}/timeline`).then((d) => { setTl(d); setI(0); }).catch((e) => setErr(String(e)));
+  }, [scenario]);
+
+  const load = useCallback((idx) => {
+    if (inflight.current) return;
+    inflight.current = true;
+    Promise.all([api(`${scenario}/state?t=${idx}`), api(`${scenario}/series?t=${idx}`)])
+      .then(([st, se]) => { setS(st); setSeries(se); setErr(null); })
+      .catch((e) => setErr(String(e)))
+      .finally(() => { inflight.current = false; });
+  }, [scenario]);
+
+  useEffect(() => { if (i !== null) load(i); }, [i, load]);
+
+  useEffect(() => {
+    if (!playing || !s) return;
+    const id = setInterval(() => setI((x) => Math.min(x + speed, s.n - 1)), 400);
+    return () => clearInterval(id);
+  }, [playing, speed, s]);
+
+  if (err && !s) return <div className="p-6 text-alarm num">Backend unreachable: {err}. Start it with: uvicorn dtwin.api.app:app --port 8000</div>;
+  if (!s) return <div className="p-6 text-dim">Loading twin…</div>;
+
+  return (
+    <div className="min-h-screen">
+      <Header s={s} scenarios={scenarios} scenario={scenario} setScenario={setScenario} />
+      <Replay tl={tl} i={i ?? 0} n={s.n} setI={setI} playing={playing} setPlaying={setPlaying}
+        speed={speed} setSpeed={setSpeed} />
+      <main className="p-3 grid gap-3 lg:grid-cols-3">
+        <div className="lg:col-span-2 space-y-3">
+          <Gauges s={s} />
+          <Trends series={series} />
+        </div>
+        <div className="space-y-3">
+          <Recommendations s={s} />
+          <Health h={s.health} />
+        </div>
+        <div className="lg:col-span-3">
+          <Alerts live={s.alerts_live} recent={s.alerts_recent} />
+        </div>
+      </main>
+    </div>
+  );
+}
