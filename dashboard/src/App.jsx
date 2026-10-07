@@ -43,8 +43,7 @@ function HeadStat({ label, value, unit = "", tone = "" }) {
 function Header({ s, scenarios, scenario, setScenario }) {
   const lvl = s.status.level;
   const label = { ok: "NORMAL", warn: "ATTENTION", alarm: "ALARM" }[lvl];
-  const active = s.alerts_live.filter((a) => a.kind !== "fixed_trip").length;
-  const fixedOn = s.alerts_live.some((a) => a.kind === "fixed_trip");
+  const active = s.alerts_live.length;
   return (
     <header className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 border-b border-edge">
       <div>
@@ -63,8 +62,7 @@ function Header({ s, scenarios, scenario, setScenario }) {
           tone={s.readings.load_pct > 100 ? "text-alarm" : ""} />
         <HeadStat label={`Time to hot-spot ${s.countdown.hotspot.limit_c} °C`} value={ttt(s.countdown.hotspot)}
           tone={s.countdown.hotspot.already_above ? "text-alarm" : s.countdown.hotspot.minutes !== null ? "text-warn" : ""} />
-        <HeadStat label={`Device ${s.countdown.fixed.limit_c} °C trip`} value={ttt(s.countdown.fixed)} tone="text-dim" />
-        <HeadStat label="Active alerts" value={active} unit={fixedOn ? " +60 °C ref" : ""}
+        <HeadStat label="Active alerts" value={active}
           tone={active ? LEVEL[lvl].split(" ")[0] : "text-ok"} />
         <select className="bg-ink border border-edge rounded px-2 py-1 text-sm" value={scenario}
           onChange={(e) => setScenario(e.target.value)}>
@@ -218,7 +216,7 @@ function Health({ h }) {
 // ---------------------------------------------------------------- 5. alerts
 function Alerts({ live, recent }) {
   const liveKeys = new Set(live.map((a) => a.start + a.what));
-  const shown = [...live.filter((a) => a.kind === "fixed_trip"), ...recent];
+  const shown = recent;
   return (
     <Panel title="Alert feed" className="overflow-auto max-h-[420px]">
       {shown.length === 0 && <div className="text-dim text-sm">No alerts.</div>}
@@ -238,6 +236,29 @@ function Alerts({ live, recent }) {
           );
         })}
       </ul>
+    </Panel>
+  );
+}
+
+// The existing device's fixed oil trip, shown for contrast. Deliberately not an
+// alert: it does not count toward status, the alert total or the health index.
+function Comparison({ s }) {
+  const f = s.countdown.fixed, ref = s.reference;
+  return (
+    <Panel title="Comparison · existing device (not an alert)">
+      <div className="text-sm">
+        Fixed {f.limit_c} °C oil trip:{" "}
+        <span className="num">{ref.fixed_trip_active ? `would be tripped since ${hhmm(ref.since)}` : ttt(f) === "none" ? "not reached at this load" : `would trip in ${ttt(f)}`}</span>
+      </div>
+      <div className="num text-[11px] text-dim mt-1">
+        oil {fmt(f.now_c)} °C · ambient {fmt(s.countdown.ambient_c)} °C leaves {fmt(f.limit_c - s.countdown.ambient_c)} K of rise ·
+        {" "}{ref.trip_episodes_24h} trip episode{ref.trip_episodes_24h === 1 ? "" : "s"} in the last 24 h
+      </div>
+      <div className="text-[11px] text-dim mt-1">
+        Twin verdict at the same instant: <span className={LEVEL[s.status.level].split(" ")[0]}>
+        {s.alerts_live.length ? s.alerts_live.map((a) => a.what).join("; ") : "no fault"}</span>.
+        An absolute oil threshold carries the ambient inside it; the twin judges rise over ambient.
+      </div>
     </Panel>
   );
 }
@@ -327,8 +348,11 @@ export default function App() {
           <Recommendations s={s} />
           <Health h={s.health} />
         </div>
-        <div className="lg:col-span-3">
+        <div className="lg:col-span-2">
           <Alerts live={s.alerts_live} recent={s.alerts_recent} />
+        </div>
+        <div>
+          <Comparison s={s} />
         </div>
       </main>
     </div>

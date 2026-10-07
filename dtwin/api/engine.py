@@ -11,12 +11,19 @@ The brief asks for a 0-100 index, so there is one, but it is only a summary of
 five physical components, each displayed with its own value and unit. The
 weights are a stated judgement, not a fitted result:
 
-    component        physical quantity (last 24 h)          100 at        0 at       weight
+    component        physical quantity (last 24 h unless noted)  100 at   0 at       weight
     thermal ageing   mean ageing factor F_AA                 <= 1.0 pu    >= 16 pu    0.30
     cooling          rise-fit slope (1.0 = as designed)      <= 1.03      >= 1.50     0.25
     loading          peak load ratio K                       <= 0.80 pu   >= 1.50 pu  0.20
-    integrity        share of channel-samples trusted        100 %        <= 70 %     0.15
+    integrity        share of the 8 channels trusted, last 1 h   100 %    <= 70 %     0.15
     unbalance        mean current unbalance (NEMA)           <= 2 %       >= 20 %     0.10
+
+A channel counts as untrusted when the validator names it suspect for any
+reason - dead, stuck, cross-phase disagreement, or a temperature offset found by
+the thermal fit (both probes when it cannot tell oil from ambient).
+
+The fixed 60 C trip comparison is NOT an alert and does not touch status or
+the index: it is the existing device's behaviour, reported for contrast.
 
 Ageing is scored on log2(F_AA) because ageing doubles every ~7 K: each
 doubling costs 25 points. Ageing and cooling carry the most weight because they
@@ -69,6 +76,7 @@ class Twin:
     df: pd.DataFrame
     rows: pd.DataFrame
     alerts: list = field(default_factory=list)
+    reference: list = field(default_factory=list)
 
     # ------------------------------------------------------------------ build
     @classmethod
@@ -100,7 +108,8 @@ class Twin:
         dt_h[0] = np.nanmedian(dt_h[1:])
         r["dt_h"] = dt_h
         r["aged_h"] = r.faa * r.dt_h
-        r["trusted_frac"] = r[[f"ch_{c}" for c in CHANNELS]].isin(["ok", "step"]).mean(axis=1)
+        n_sus = r.suspect_channels.fillna("").map(lambda x: len([c for c in x.split(",") if c]))
+        r["trusted_frac"] = 1.0 - n_sus / len(CHANNELS)
         r["oil_c"] = df.oil_temp
         r["ambient_c"] = df.ambient_temp
         r["rise_c"] = df.oil_temp - df.ambient_temp
@@ -171,7 +180,8 @@ class Twin:
                 "Compare with the twin's diagnosis above; trip on rise over ambient instead.",
                 "fixed_trip")
         A.sort(key=lambda a: a["start"])
-        return A
+        self.reference = [a for a in A if a["kind"] == "fixed_trip"]
+        return [a for a in A if a["kind"] != "fixed_trip"]
 
     # ------------------------------------------------------------------ query
     def locate(self, t):
@@ -190,14 +200,12 @@ class Twin:
             "ageing": float(w.faa.mean()),
             "cooling": float(r.slope.iloc[i]) if np.isfinite(r.slope.iloc[i]) else 1.0,
             "loading": float(w.K_oil.max()),
-            "integrity": float(100 * w.trusted_frac.mean()),
+            "integrity": float(100 * r.loc[t - pd.Timedelta(hours=1):t].trusted_frac.mean()),
             "unbalance": float(w.current_unbalance_pct.mean()),
         }
         comps, tot, wsum = [], 0.0, 0.0
         for key, wt, good, bad, unit, label in HEALTH:
             sc = _score(vals[key], good, bad, log2=(key == "ageing"))
-            if key == "integrity" and r.sensor_alarm.iloc[i]:
-                sc = min(sc, 60.0)          # an active instrument fault caps integrity
             comps.append({"key": key, "label": label, "value": _f(vals[key], 3), "unit": unit,
                           "score": _f(sc, 0), "weight": wt, "good": good, "bad": bad})
             if sc is not None:
@@ -259,7 +267,10 @@ class Twin:
         row = r.iloc[i]
         ts = r.index[i]
         live = [a for a in self.alerts if a["start"] <= ts <= a["end"]]
-        recent = [a for a in self.alerts if a["start"] <= ts and a["kind"] != "fixed_trip"][-12:][::-1]
+        recent = [a for a in self.alerts if a["start"] <= ts][-12:][::-1]
+        ref = [a for a in self.reference if a["start"] <= ts <= a["end"]]
+        trips_24h = sum(1 for a in self.reference
+                        if a["start"] <= ts and a["end"] >= ts - pd.Timedelta(hours=24))
         day = r.loc[ts - pd.Timedelta(hours=24):ts]
         level = "alarm" if any(a["level"] == "alarm" for a in live) else \
             "warn" if any(a["level"] == "warn" for a in live) else "ok"
@@ -295,14 +306,16 @@ class Twin:
             "countdown": cd,
             "alerts_live": [_alert_json(a) for a in live],
             "alerts_recent": [_alert_json(a) for a in recent],
+            "reference": {"fixed_trip_active": bool(ref),
+                          "since": ref[0]["start"].isoformat() if ref else None,
+                          "trip_episodes_24h": trips_24h,
+                          "note": ref[0]["why"] if ref else None},
             "recommendations": self._recommend(live, cd),
         }
 
     def _recommend(self, live, cd):
         out = []
         for a in live:
-            if a["kind"] == "fixed_trip":
-                continue
             out.append({"priority": 1 if a["level"] == "alarm" else 2, "family": a["family"],
                         "text": a["action"], "because": a["what"]})
         h = cd["hotspot"]
