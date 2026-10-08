@@ -1,7 +1,11 @@
-# Digital Twin of a Distribution Transformer — physics core
+# Digital Twin of a Distribution Transformer
 
-Day 1 foundation: the thermal, ageing and unbalance engines, plus a synthetic
-data generator with ground-truth fault labels.
+Condition monitoring and decision support for a distribution transformer from
+the signals CPRI's device already records. Start with `docs/user-guide.md`;
+results are in `docs/results.md`, the method in `docs/methodology.md`, every
+assumption in `docs/assumptions.md`, and the module map in `docs/architecture.md`.
+
+The sections below are the Day 1 physics-core notes.
 
 ## Run
 
