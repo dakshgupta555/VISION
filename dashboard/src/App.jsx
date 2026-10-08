@@ -51,6 +51,10 @@ function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded }) 
           tone={s.countdown.hotspot.already_above ? "text-alarm" : s.countdown.hotspot.minutes !== null ? "text-warn" : ""} />
         <HeadStat label="Active alerts" value={active}
           tone={active ? LEVEL[lvl].split(" ")[0] : "text-ok"} />
+        <a className="border border-accent text-accent rounded px-2 py-1 text-xs"
+          href={`/api/${scenario}/report.pdf?t=${s.i}${kva ? `&kva=${kva}` : ""}`} download>
+          Download report (PDF)
+        </a>
         <NameplateSelect kva={kva} setKva={setKva} rated={recorded} />
         <select className="bg-ink border border-edge rounded px-2 py-1 text-sm" value={scenario}
           onChange={(e) => setScenario(e.target.value)}>

@@ -11,7 +11,7 @@ Truth files are never read here.
 
 from typing import Optional, Union
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from .engine import get_twin, scenarios, selftest
@@ -75,6 +75,16 @@ def ratings():
 def ingest_report(name: str, kva: Optional[float] = None):
     rep = _twin(name, kva).report
     return {**rep.as_dict(), "text": rep.text()}
+
+
+@app.get("/api/{name}/report.pdf")
+def report_pdf(name: str, t: Optional[str] = None, kva: Optional[float] = None):
+    from ..report import build_pdf
+    tw = _twin(name, kva)
+    pdf = build_pdf(tw, _cursor(t))
+    stamp = tw.rows.index[tw.locate(_cursor(t))].strftime("%Y%m%d_%H%M")
+    return Response(pdf, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="{tw.np_.tag}_{name}_{stamp}.pdf"'})
 
 
 @app.get("/api/{name}/alerts")
