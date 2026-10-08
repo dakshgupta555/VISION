@@ -27,23 +27,34 @@ function Projection({ p, hsLimit, trip, height = 120 }) {
 // ---------------------------------------------------------------- 1. time-to-trip
 export function Countdown({ s }) {
   const { hotspot: h, fixed: f, steady } = s.countdown;
-  const tone = h.already_above ? "text-alarm" : h.minutes !== null ? "text-warn" : "text-ok";
-  const head = h.already_above ? "Hot-spot limit exceeded"
+  const lvl = s.status.level;
+  const top = s.alerts_live[0];
+  // Abnormal states lead with the problem; the countdown is detail beneath it.
+  const head = lvl !== "ok" && top ? top.headline
+    : h.already_above ? "Hot-spot limit exceeded"
     : h.minutes !== null ? `Hot-spot ${h.limit_c} °C in ${fmt(h.minutes, 0)} min` : "Hot-spot limit not reached";
+  const headTone = lvl === "alarm" ? "text-alarm" : lvl === "warn" ? "text-warn" : "text-ok";
+  const cdTone = h.already_above ? "text-alarm" : h.minutes !== null ? "text-warn" : "text-dim";
+  const more = s.alerts_live.length - 1;
   return (
-    <Panel title="Time to trip · thermal twin projection at present load and ambient">
+    <Panel title={lvl === "ok" ? "Status · thermal twin projection" : `${lvl === "alarm" ? "Alarm" : "Attention"} · ${s.alerts_live.length} active`}
+      className={lvl === "alarm" ? "border-alarm border-2" : lvl === "warn" ? "border-warn border-2" : ""}>
       <div className="grid md:grid-cols-3 gap-3 items-center">
         <div>
-          <div className={`num text-3xl font-semibold ${tone}`}>{head}</div>
-          <div className="num text-sm mt-1">
-            {h.shed_pct > 0 ? <span className={tone}>Shed {fmt(h.shed_pct, 0)}% load</span> : <span className="text-ok">No shed needed</span>}
+          <div className={`text-2xl font-semibold leading-tight ${headTone}`}>{head}</div>
+          {lvl !== "ok" && more > 0 && <div className="text-xs text-dim mt-1">+{more} more: {s.alerts_live.slice(1).map((a) => a.what).join("; ")}</div>}
+          <div className="num text-sm mt-2 border-t border-edge pt-1">
+            <span className={cdTone}>
+              {h.already_above ? `Hot-spot over ${h.limit_c} °C` : h.minutes !== null ? `Hot-spot ${h.limit_c} °C in ${fmt(h.minutes, 0)} min` : `Hot-spot ${h.limit_c} °C not reached`}
+            </span>
+            {h.shed_pct > 0 ? <span className={cdTone}> · shed {fmt(h.shed_pct, 0)}%</span> : <span className="text-dim"> · no shed needed</span>}
             <span className="text-dim"> · safe load {fmt(100 * h.safe_load_pu, 0)}%</span>
           </div>
           <div className="num text-[11px] text-dim mt-1">
             settles at {fmt(h.settles_at_c)} °C hot-spot · ageing {fmt(steady.faa, 2)} pu ·
             ₹{fmt(steady.life_cost_inr_per_day, 0)}/day · cooling factor {fmt(s.countdown.cooling_factor_used, 3)}
           </div>
-          <div className="num text-[11px] text-dim mt-2 border-t border-edge pt-1">
+          <div className="num text-[11px] text-dim mt-1">
             Existing device ({f.limit_c} °C oil): {ttt(f)} — comparison only
           </div>
         </div>

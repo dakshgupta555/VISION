@@ -7,7 +7,7 @@ import {
 // recommendations. A replay cursor drives all of them: the twin answers as of
 // the selected instant, using only data up to it.
 
-import { api, axis, fmt, hhmm, LEVEL, Panel, tip, ttt } from "./ui.jsx";
+import { api, axis, band, BG, BORDER, fmt, hhmm, LEVEL, Panel, TEXT, tip, ttt } from "./ui.jsx";
 import {
   AmbientTable, Channels, Cooling, Countdown, Gprs, Life, NameplateSelect, SelfTest, WhatIf,
 } from "./features.jsx";
@@ -27,6 +27,10 @@ function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded }) 
   const lvl = s.status.level;
   const label = { ok: "NORMAL", warn: "ATTENTION", alarm: "ALARM" }[lvl];
   const active = s.alerts_live.length;
+  const hb = Object.fromEntries(s.health.components.map((c) => [c.key, band(c.score)]));
+  const tx = (b) => (b && b !== "ok" ? TEXT[b] : "");
+  // the index never reads healthier than the status beside it
+  const worse = (a, b) => (["alarm", "warn", "ok"].find((x) => x === a || x === b) ?? a);
   return (
     <header className="flex flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3 border-b border-edge">
       <div>
@@ -38,11 +42,11 @@ function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded }) 
       <div className={`border rounded px-3 py-1 font-semibold tracking-wider ${LEVEL[lvl]}`}>{label}</div>
       <div className="num text-sm text-dim">{s.timestamp.replace("T", " ")}</div>
       <div className="ml-auto flex flex-wrap items-center gap-5">
-        <HeadStat label="Health index" value={fmt(s.health.index, 0)} unit="/100" />
+        <HeadStat label="Health index" value={fmt(s.health.index, 0)} unit="/100" tone={tx(worse(band(s.health.index), lvl))} />
         <HeadStat label="Hot-spot" value={fmt(s.readings.hotspot_c)} unit="°C"
-          tone={s.readings.hotspot_c > s.countdown.hotspot.limit_c ? "text-alarm" : ""} />
+          tone={tx(hb.ageing)} />
         <HeadStat label="Loading" value={fmt(s.readings.load_pct, 0)} unit="%"
-          tone={s.readings.load_pct > 100 ? "text-alarm" : ""} />
+          tone={tx(hb.loading)} />
         <HeadStat label={`Time to hot-spot ${s.countdown.hotspot.limit_c} °C`} value={ttt(s.countdown.hotspot)}
           tone={s.countdown.hotspot.already_above ? "text-alarm" : s.countdown.hotspot.minutes !== null ? "text-warn" : ""} />
         <HeadStat label="Active alerts" value={active}
@@ -82,11 +86,11 @@ function Replay({ tl, i, n, setI, playing, setPlaying, speed, setSpeed }) {
 }
 
 // ---------------------------------------------------------------- 2. gauges
-function Tile({ label, value, unit, sub, tone }) {
+function Tile({ label, value, unit, sub, b }) {
   return (
-    <div className="bg-ink border border-edge rounded p-2">
-      <div className="text-[10px] uppercase tracking-widest text-dim">{label}</div>
-      <div className={`num text-2xl ${tone || ""}`}>{value}<span className="text-sm text-dim ml-1">{unit}</span></div>
+    <div className={`bg-ink border rounded p-2 ${b ? BORDER[b] : "border-edge"} ${b && b !== "ok" ? "border-2" : ""}`}>
+      <div className={`text-[10px] uppercase tracking-widest ${b && b !== "ok" ? TEXT[b] : "text-dim"}`}>{label}</div>
+      <div className={`num text-2xl ${b && b !== "ok" ? TEXT[b] : ""}`}>{value}<span className="text-sm text-dim ml-1">{unit}</span></div>
       {sub && <div className="num text-[11px] text-dim">{sub}</div>}
     </div>
   );
@@ -95,24 +99,20 @@ function Tile({ label, value, unit, sub, tone }) {
 function Gauges({ s }) {
   const r = s.readings;
   const chBad = Object.entries(r.channels).filter(([, v]) => !["ok", "step"].includes(v));
+  const sc = Object.fromEntries(s.health.components.map((c) => [c.key, band(c.score)]));
   const res = Math.abs(r.residual_k ?? 0);
   return (
     <Panel title="Live readings">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         <Tile label="Top oil" value={fmt(r.oil_c)} unit="°C" sub={`twin ${fmt(r.oil_pred_c)} °C`} />
-        <Tile label="Hot-spot" value={fmt(r.hotspot_c)} unit="°C" sub="measured oil + winding gradient"
-          tone={r.hotspot_c > 110 ? "text-alarm" : ""} />
+        <Tile label="Hot-spot" value={fmt(r.hotspot_c)} unit="°C" sub="measured oil + winding gradient" b={sc.ageing} />
         <Tile label="Ambient" value={fmt(r.ambient_c)} unit="°C" sub={`oil rise ${fmt(r.rise_k)} K`} />
-        <Tile label="Residual" value={fmt(r.residual_k, 2)} unit="K" sub="measured − twin"
-          tone={res > 2 ? "text-warn" : ""} />
-        <Tile label="Load" value={fmt(r.load_pct, 0)} unit="%" sub={`worst phase ${fmt(r.load_worst_phase_pct, 0)} %`}
-          tone={r.load_pct > 100 ? "text-alarm" : ""} />
-        <Tile label="Current unbalance" value={fmt(r.current_unbalance_pct)} unit="%"
+        <Tile label="Residual" value={fmt(r.residual_k, 2)} unit="K" sub="measured − twin" b={res > 4 ? "alarm" : res > 2 ? "warn" : null} />
+        <Tile label="Load" value={fmt(r.load_pct, 0)} unit="%" sub={`worst phase ${fmt(r.load_worst_phase_pct, 0)} %`} b={sc.loading} />
+        <Tile label="Current unbalance" value={fmt(r.current_unbalance_pct)} unit="%" b={sc.unbalance}
           sub={`VUF ${fmt(r.voltage_unbalance_pct, 2)} %`} />
-        <Tile label="Ageing factor" value={fmt(r.faa, 2)} unit="pu" sub={`last 24 h: ${fmt(s.ageing_24h.equivalent_hours, 1)} h · ₹${fmt(s.ageing_24h.life_cost_inr, 0)}`}
-          tone={r.faa > 1 ? "text-alarm" : ""} />
-        <Tile label="Rise fit" value={fmt(r.slope, 3)} unit="slope" sub={`intercept ${fmt(r.intercept_k, 2)} K`}
-          tone={r.slope > 1.06 ? "text-alarm" : ""} />
+        <Tile label="Ageing factor" value={fmt(r.faa, 2)} unit="pu" sub={`last 24 h: ${fmt(s.ageing_24h.equivalent_hours, 1)} h · ₹${fmt(s.ageing_24h.life_cost_inr, 0)}`} b={sc.ageing} />
+        <Tile label="Rise fit" value={fmt(r.slope, 3)} unit="slope" sub={`intercept ${fmt(r.intercept_k, 2)} K`} b={sc.cooling} />
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 num text-xs">
         <div className="text-dim">I&nbsp; {["IR", "IY", "IB"].map((c) => `${c} ${fmt(r.currents_a[c])}`).join("  ")} A</div>
@@ -171,22 +171,24 @@ function Trends({ series }) {
 
 // ---------------------------------------------------------------- 4. health
 function Health({ h }) {
-  const tone = (sc) => (sc >= 80 ? "bg-ok" : sc >= 50 ? "bg-warn" : "bg-alarm");
   return (
     <Panel title="Health breakdown">
       <div className="space-y-2">
-        {h.components.map((c) => (
-          <div key={c.key}>
-            <div className="flex justify-between text-xs">
-              <span>{c.label} <span className="text-dim">· w {c.weight}</span></span>
-              <span className="num">{fmt(c.value, 3)} {c.unit} → <b>{fmt(c.score, 0)}</b>
-                <span className="text-dim"> (100 ≤{c.good} · 0 at {fmt(c.bad, 3)})</span></span>
+        {h.components.map((c) => {
+          const b = band(c.score) ?? "alarm";
+          return (
+            <div key={c.key}>
+              <div className="flex justify-between text-xs">
+                <span className={b === "ok" ? "" : TEXT[b]}>{c.label} <span className="text-dim">· w {c.weight}</span></span>
+                <span className="num">{fmt(c.value, 3)} {c.unit} → <b className={TEXT[b]}>{fmt(c.score, 0)}</b>
+                  <span className="text-dim"> (100 ≤{c.good} · 0 at {fmt(c.bad, 3)})</span></span>
+              </div>
+              <div className={`h-2 rounded ${b === "ok" ? "bg-ink" : b === "warn" ? "bg-warn/20" : "bg-alarm/20"}`}>
+                <div className={`h-2 rounded ${BG[b]}`} style={{ width: `${Math.max(c.score ?? 0, 4)}%` }} />
+              </div>
             </div>
-            <div className="h-1.5 bg-ink rounded">
-              <div className={`h-1.5 rounded ${tone(c.score ?? 0)}`} style={{ width: `${c.score ?? 0}%` }} />
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <div className="mt-3 text-[11px] text-dim">
         Each score is the quantity its alarm fires on: 0 = that alarm's threshold, 100 = healthy

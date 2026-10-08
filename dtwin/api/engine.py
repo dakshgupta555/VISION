@@ -383,7 +383,8 @@ class Twin:
             },
             "health": self.health(i),
             "countdown": cd,
-            "alerts_live": [_alert_json(a) for a in live],
+            "alerts_live": [{**_alert_json(a), "headline": self._headline(a, row)}
+                            for a in sorted(live, key=_urgency)],
             "alerts_recent": [_alert_json(a) for a in recent],
             "reference": {"fixed_trip_active": bool(ref),
                           "since": ref[0]["start"].isoformat() if ref else None,
@@ -394,6 +395,26 @@ class Twin:
             "ambient_table": self.ambient_table(i),
             "gprs": self.gprs_payload(i, live, cd),
         }
+
+    SHORT = {"cooling": "inspect radiators, oil level and fans",
+             "temp_offset": "recalibrate the probe; do not dispatch",
+             "mismatch": "check the nameplate and probe placement",
+             "unbalance": "rebalance at next feeder visit",
+             "overload": "shed or transfer load",
+             "channel_dead": "check wiring and logger input",
+             "channel_stuck": "reset the logger channel",
+             "channel_suspect": "check CT/VT ratio and connections"}
+
+    def _headline(self, a, row):
+        """Issue · its value NOW · what to do, for the main headline."""
+        k = a["kind"]
+        val = {"cooling": f"rise +{100 * (row.slope - 1):.0f}% over design",
+               "temp_offset": f"{row.intercept:+.1f} K offset",
+               "mismatch": f"slope {row.slope:.2f}",
+               "unbalance": f"{row.current_unbalance_pct:.1f}%",
+               "overload": f"{100 * row.K_oil:.0f}% load"}.get(k)
+        parts = [a["what"]] + ([val] if val else []) + [self.SHORT.get(k, a["action"])]
+        return " · ".join(parts)
 
     def _recommend(self, live, cd):
         out = []
@@ -498,6 +519,11 @@ def selftest(rating_kva: float = 100.0, seed: int = 9001):
             "min_detectable_pct": smallest,
             "note": "Cooling degradation, 12 h onset, held 6 days, fresh simulated record. "
                     "Severity = fractional increase in top-oil rise."}
+
+
+def _urgency(a):
+    """Alarms before warnings; within a level, asset before sensor."""
+    return ({"alarm": 0, "warn": 1}.get(a["level"], 2), {"asset": 0, "sensor": 1}.get(a["family"], 2))
 
 
 def _alert_json(a):
