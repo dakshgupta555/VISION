@@ -219,8 +219,13 @@ class Twin:
         return {"index": _f(tot / wsum, 0) if wsum else None, "components": comps}
 
     def countdown(self, i):
-        """Two projections at the present load and ambient, using the twin's
-        own estimate of the cooling factor.
+        return self.whatif(i)
+
+    def whatif(self, i, load_pu=None, ambient_c=None, cooling_factor=None, horizon_h=12.0):
+        """Project the twin forward from its state at sample i, holding a load
+        and ambient. Defaults are the present values and the twin's own cooling
+        estimate, which makes this the live time-to-trip countdown; the what-if
+        sliders override them.
 
         hotspot   the twin's limit: hot-spot at the ageing reference (F_AA = 1).
                   Only this one produces a load-shed instruction.
@@ -229,42 +234,111 @@ class Twin:
                   an absolute oil threshold is ambient-blind (Finding 1).
         """
         r, np_ = self.rows, self.np_
-        ko, kw, amb = float(r.K_oil.iloc[i]), float(r.K_winding.iloc[i]), float(r.ambient_c.iloc[i])
+        ko_now, kw_now = float(r.K_oil.iloc[i]), float(r.K_winding.iloc[i])
+        ratio_w = kw_now / ko_now if ko_now > 0 else 1.0
+        amb_now = float(r.ambient_c.iloc[i])
         oil = float(r.oil_c.iloc[i]) if r.ch_oil_temp.iloc[i] in ("ok", "step") \
             else float(r.pred_oil_c.iloc[i])
         hs = float(r.hotspot_c.iloc[i])
-        cf = float(r.slope.iloc[i]) if r.thermal_status.iloc[i] == "asset_cooling" else 1.0
+        cf_est = float(r.slope.iloc[i]) if r.thermal_status.iloc[i] == "asset_cooling" else 1.0
+        ko = ko_now if load_pu is None else float(load_pu)
+        amb = amb_now if ambient_c is None else float(ambient_c)
+        cf = cf_est if cooling_factor is None else float(cooling_factor)
+        kw = ko * ratio_w
         model = ThermalModel(np_, cooling_factor=cf)
-        state = ThermalState(top_oil_rise_k=oil - amb, hotspot_rise_k=hs - oil, ambient_c=amb)
-        ratio_w = kw / ko if ko > 0 else 1.0
+        # the oil keeps its present rise; a new ambient shifts the absolute level
+        state = ThermalState(top_oil_rise_k=oil - amb_now, hotspot_rise_k=hs - oil, ambient_c=amb)
+        oil0, hs0 = amb + (oil - amb_now), amb + (hs - amb_now)
 
-        def steady_hs(k):
-            return amb + cf * top_oil_rise_ultimate(k, np_) + hotspot_rise_ultimate(k * ratio_w, np_)
-
-        def steady_oil(k):
-            return amb + cf * top_oil_rise_ultimate(k, np_)
-
-        def max_load(fn, limit):
-            if fn(0.0) > limit:
-                return 0.0
-            lo, hi = 0.0, 3.0
-            for _ in range(50):
-                mid = 0.5 * (lo + hi)
-                lo, hi = (mid, hi) if fn(mid) <= limit else (lo, mid)
-            return lo
+        steady_oil = lambda k: steady_top_oil(k, amb, cf, np_)
+        steady_hs = lambda k: steady_hotspot_cf(k, ratio_w, amb, cf, np_)
 
         def project(limit, use, now, fn):
             mins = None if now >= limit else model.minutes_to_threshold(
-                state, ko, kw, amb, limit, use=use, horizon_min=720)
+                state, ko, kw, amb, limit, use=use, horizon_min=60 * horizon_h)
             safe = max_load(fn, limit)
             return {"limit_c": limit, "now_c": _f(now, 1), "minutes": _f(mins, 0),
                     "already_above": now >= limit, "settles_at_c": _f(fn(ko), 1),
                     "safe_load_pu": _f(safe, 3),
                     "shed_pct": _f(max(0.0, 100 * (1 - safe / ko)) if ko > 0 else 0.0, 0)}
 
+        oil_p, hs_p = model.project(state, ko, kw, amb, 60 * horizon_h, dt_minutes=10.0)
+        hs_ss = steady_hs(ko)
+        faa_ss = float(ageing_factor(hs_ss, np_))
         return {"load_pu": _f(ko, 3), "ambient_c": _f(amb, 1), "cooling_factor_used": _f(cf, 3),
-                "hotspot": project(np_.reference_hotspot_c, "hotspot", hs, steady_hs),
-                "fixed": project(np_.trip_oil_temp_c, "top_oil", oil, steady_oil)}
+                "cooling_factor_estimated": _f(cf_est, 3),
+                "hotspot": project(np_.reference_hotspot_c, "hotspot", hs0, steady_hs),
+                "fixed": project(np_.trip_oil_temp_c, "top_oil", oil0, steady_oil),
+                "steady": {"top_oil_c": _f(steady_oil(ko), 1), "hotspot_c": _f(hs_ss, 1),
+                           "faa": _f(faa_ss, 3),
+                           "aged_hours_per_day": _f(24 * faa_ss, 2),
+                           "life_cost_inr_per_day": _f(24 * faa_ss * np_.cost_per_hour_of_life_inr, 0)},
+                "projection": {"minutes": [10 * (k + 1) for k in range(len(oil_p))],
+                               "oil_c": [round(float(x), 1) for x in oil_p],
+                               "hotspot_c": [round(float(x), 1) for x in hs_p]}}
+
+    def life(self, i):
+        """Insulation life consumed, in hours and rupees, at several horizons."""
+        r, np_ = self.rows, self.np_
+        ts = r.index[i]
+        cost = np_.cost_per_hour_of_life_inr
+
+        def win(h):
+            w = r.loc[ts - pd.Timedelta(hours=h):ts] if h else r.iloc[:i + 1]
+            aged, real = float(w.aged_h.sum()), float(w.dt_h.sum())
+            return {"aged_h": _f(aged, 2), "real_h": _f(real, 1), "inr": _f(aged * cost, 0),
+                    "rate_pu": _f(aged / real, 3) if real else None}
+
+        return {"cost_per_aged_hour_inr": _f(cost, 2), "replacement_cost_inr": np_.replacement_cost_inr,
+                "normal_life_hours": np_.normal_life_hours,
+                "last_1h": win(1), "last_24h": win(24), "since_start": win(None)}
+
+    def ambient_table(self, i):
+        """What each protection philosophy lets the unit carry at each ambient
+        (Finding 1). Rise-based trip keeps the 30 K rise their 60 C setting
+        implies at the 30 C design ambient."""
+        np_ = self.np_
+        r = self.rows
+        ratio_w = float(r.K_winding.iloc[i] / r.K_oil.iloc[i]) if r.K_oil.iloc[i] > 0 else 1.0
+        rise_trip = np_.trip_oil_temp_c - 30.0
+        amb_now = float(r.ambient_c.iloc[i])
+        rows = []
+        for amb in sorted({15, 20, 25, 30, 35, 40, 42, 45, 48, round(amb_now)}):
+            rows.append({"ambient_c": amb,
+                         "fixed_trip_pu": _f(max_load(lambda k: steady_top_oil(k, amb, 1.0, np_),
+                                                      np_.trip_oil_temp_c), 2),
+                         "rise_trip_pu": _f(max_load(lambda k: steady_top_oil(k, 0.0, 1.0, np_),
+                                                     rise_trip), 2),
+                         "hotspot_pu": _f(max_load(lambda k: steady_hotspot_cf(k, ratio_w, amb, 1.0, np_),
+                                                   np_.reference_hotspot_c), 2),
+                         "current": amb == round(amb_now)})
+        return {"rise_trip_k": rise_trip, "fixed_trip_c": np_.trip_oil_temp_c,
+                "hotspot_limit_c": np_.reference_hotspot_c, "rows": rows}
+
+    def gprs_payload(self, i, live, cd):
+        """Compact alert message for the existing GPRS link.
+
+        FORMAT ASSUMED: CPRI's device message format is not in hand, so this is
+        a comma-separated SMS-length frame; replace the field order once their
+        format is known. Kept under 160 characters."""
+        r, np_ = self.rows, self.np_
+        row = r.iloc[i]
+        code = {"cooling": "COOL", "temp_offset": "TOFS", "mismatch": "TMIS", "unbalance": "UNB",
+                "overload": "OVL", "channel_dead": "CHDEAD", "channel_stuck": "CHSTK",
+                "channel_suspect": "CHSUS"}
+        lvl = "ALM" if any(a["level"] == "alarm" for a in live) else \
+            "WRN" if live else "OK"
+        codes = "+".join(dict.fromkeys(code.get(a["kind"], "OTH") for a in live)) or "NONE"
+        fam = "".join(sorted({a["family"][0].upper() for a in live})) or "-"
+        h = cd["hotspot"]
+        ttt = "NOW" if h["already_above"] else (f"{h['minutes']:.0f}" if h["minutes"] is not None else "-")
+        fields = [np_.tag, r.index[i].strftime("%y%m%d%H%M"), lvl, codes, fam,
+                  f"OT{row.oil_c:.0f}", f"HS{row.hotspot_c:.0f}", f"LD{100 * row.K_oil:.0f}",
+                  f"TT{ttt}", f"SH{h['shed_pct']:.0f}", (row.suspect_channels or "-").replace(",", "/")]
+        msg = ",".join(fields)
+        return {"message": msg[:160], "length": len(msg), "format": "assumed",
+                "fields": ["tag", "yymmddHHMM", "level", "codes", "family A/S", "oil C", "hotspot C",
+                           "load %", "min to hotspot limit", "shed %", "suspect channels"]}
 
     def state(self, t=None):
         i = self.locate(t)
@@ -316,6 +390,9 @@ class Twin:
                           "trip_episodes_24h": trips_24h,
                           "note": ref[0]["why"] if ref else None},
             "recommendations": self._recommend(live, cd),
+            "life": self.life(i),
+            "ambient_table": self.ambient_table(i),
+            "gprs": self.gprs_payload(i, live, cd),
         }
 
     def _recommend(self, live, cd):
@@ -367,13 +444,69 @@ class Twin:
                 "level": lvl.tolist(), "oil_c": [round(float(v), 1) for v in w.oil_c.values]}
 
 
+def steady_top_oil(k, ambient_c, cf, np_):
+    return ambient_c + cf * top_oil_rise_ultimate(k, np_)
+
+
+def steady_hotspot_cf(k, ratio_w, ambient_c, cf, np_):
+    return steady_top_oil(k, ambient_c, cf, np_) + hotspot_rise_ultimate(k * ratio_w, np_)
+
+
+def max_load(fn, limit):
+    """Largest load ratio whose steady-state temperature fn(k) stays at or
+    under limit; 0 if even no load exceeds it."""
+    if fn(0.0) > limit:
+        return 0.0
+    lo, hi = 0.0, 3.0
+    for _ in range(50):
+        mid = 0.5 * (lo + hi)
+        lo, hi = (mid, hi) if fn(mid) <= limit else (lo, mid)
+    return lo
+
+
+@lru_cache(maxsize=8)
+def selftest(rating_kva: float = 100.0, seed: int = 9001):
+    """Fault-injection self-test: inject cooling degradation of increasing
+    severity into a fresh simulated record for this nameplate and measure the
+    smallest one the twin detects, how fast, and whether anything fires before
+    the fault. A measured detection limit, not an asserted one."""
+    from ..simulate.generator import TransformerSimulator, SimConfig
+    from ..simulate import faults as F
+    np_ = preset(rating_kva)
+    out = []
+    for sev in (0.02, 0.04, 0.06, 0.08, 0.10, 0.15, 0.20, 0.30):
+        start = 6 * 24
+        f = F.cooling_degradation(start_h=start, end_h=start + 6 * 24, severity=sev, ramp_h=12)
+        df, truth = TransformerSimulator(np_, SimConfig(days=13, seed=seed)).generate(custom_faults=[f])
+        rows, _, _ = validate(df.drop(columns=["transformer_id"]), np_)
+        fault = (truth.fault_label != "none").values
+        hit = rows.thermal_status.eq("asset_cooling").values
+        first = int(np.argmax(hit & fault)) if (hit & fault).any() else None
+        t0 = int(np.argmax(fault))
+        dt_h = (rows.index[1] - rows.index[0]).total_seconds() / 3600
+        out.append({"severity_pct": round(100 * sev), "detected": first is not None,
+                    "latency_h": round((first - t0) * dt_h, 1) if first is not None else None,
+                    "extra_rise_at_rated_k": round(sev * np_.top_oil_rise_rated_k, 1),
+                    "alarm_before_fault": bool(hit[:t0].any())})
+    det = [x["severity_pct"] for x in out if x["detected"]]
+    smallest = None
+    for x in out:                       # smallest severity from which every larger one is caught
+        if all(y["detected"] for y in out if y["severity_pct"] >= x["severity_pct"]):
+            smallest = x["severity_pct"]
+            break
+    return {"rating_kva": rating_kva, "seed": seed, "runs": out,
+            "min_detectable_pct": smallest,
+            "note": "Cooling degradation, 12 h onset, held 6 days, fresh simulated record. "
+                    "Severity = fractional increase in top-oil rise."}
+
+
 def _alert_json(a):
     return {**a, "start": a["start"].isoformat(), "end": a["end"].isoformat()}
 
 
-@lru_cache(maxsize=16)
-def get_twin(name: str) -> Twin:
-    return Twin.from_csv(name)
+@lru_cache(maxsize=32)
+def get_twin(name: str, rating_kva: float = None) -> Twin:
+    return Twin.from_csv(name, rating_kva)
 
 
 def scenarios():

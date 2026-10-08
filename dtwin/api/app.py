@@ -14,16 +14,17 @@ from typing import Optional, Union
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from .engine import get_twin, scenarios
+from .engine import get_twin, scenarios, selftest
+from ..physics.nameplate import IS_1180_RATINGS
 
 app = FastAPI(title="Distribution Transformer Digital Twin", version="0.3")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
-def _twin(name):
+def _twin(name, kva=None):
     if name not in scenarios():
         raise HTTPException(404, f"unknown scenario {name!r}")
-    return get_twin(name)
+    return get_twin(name, kva)
 
 
 def _cursor(t: Optional[str]) -> Union[int, str, None]:
@@ -38,18 +39,36 @@ def list_scenarios():
 
 
 @app.get("/api/{name}/state")
-def state(name: str, t: Optional[str] = None):
-    return _twin(name).state(_cursor(t))
+def state(name: str, t: Optional[str] = None, kva: Optional[float] = None):
+    return _twin(name, kva).state(_cursor(t))
 
 
 @app.get("/api/{name}/series")
-def series(name: str, t: Optional[str] = None, hours: float = 48.0):
-    return _twin(name).series(_cursor(t), hours=hours)
+def series(name: str, t: Optional[str] = None, hours: float = 48.0, kva: Optional[float] = None):
+    return _twin(name, kva).series(_cursor(t), hours=hours)
 
 
 @app.get("/api/{name}/timeline")
-def timeline(name: str):
-    return _twin(name).timeline()
+def timeline(name: str, kva: Optional[float] = None):
+    return _twin(name, kva).timeline()
+
+
+@app.get("/api/{name}/whatif")
+def whatif(name: str, t: Optional[str] = None, load: Optional[float] = None,
+           ambient: Optional[float] = None, cf: Optional[float] = None,
+           kva: Optional[float] = None):
+    tw = _twin(name, kva)
+    return tw.whatif(tw.locate(_cursor(t)), load_pu=load, ambient_c=ambient, cooling_factor=cf)
+
+
+@app.get("/api/selftest")
+def run_selftest(kva: float = 100.0):
+    return selftest(float(kva))
+
+
+@app.get("/api/ratings")
+def ratings():
+    return {"ratings": [25, 63, 100, 250], "all_is1180": IS_1180_RATINGS}
 
 
 @app.get("/api/{name}/alerts")

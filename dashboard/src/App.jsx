@@ -7,29 +7,12 @@ import {
 // recommendations. A replay cursor drives all of them: the twin answers as of
 // the selected instant, using only data up to it.
 
-const api = (path) => fetch(`/api/${path}`).then((r) => {
-  if (!r.ok) throw new Error(`${r.status} ${path}`);
-  return r.json();
-});
-
-const LEVEL = {
-  ok: "text-ok border-ok", warn: "text-warn border-warn", alarm: "text-alarm border-alarm",
-  info: "text-dim border-edge",
-};
-const fmt = (v, d = 1) => (v === null || v === undefined ? "—" : Number(v).toFixed(d));
-const hhmm = (iso) => iso?.slice(5, 16).replace("T", " ");
-
-function Panel({ title, children, className = "" }) {
-  return (
-    <section className={`bg-panel border border-edge rounded-md p-3 ${className}`}>
-      <h2 className="text-[11px] uppercase tracking-widest text-dim mb-2">{title}</h2>
-      {children}
-    </section>
-  );
-}
+import { api, axis, fmt, hhmm, LEVEL, Panel, tip, ttt } from "./ui.jsx";
+import {
+  AmbientTable, Channels, Cooling, Countdown, Gprs, Life, NameplateSelect, SelfTest, WhatIf,
+} from "./features.jsx";
 
 // ---------------------------------------------------------------- 1. header
-const ttt = (x) => (x.already_above ? "exceeded" : x.minutes !== null ? `${fmt(x.minutes, 0)} min` : "none");
 
 function HeadStat({ label, value, unit = "", tone = "" }) {
   return (
@@ -40,7 +23,7 @@ function HeadStat({ label, value, unit = "", tone = "" }) {
   );
 }
 
-function Header({ s, scenarios, scenario, setScenario }) {
+function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded }) {
   const lvl = s.status.level;
   const label = { ok: "NORMAL", warn: "ATTENTION", alarm: "ALARM" }[lvl];
   const active = s.alerts_live.length;
@@ -64,6 +47,7 @@ function Header({ s, scenarios, scenario, setScenario }) {
           tone={s.countdown.hotspot.already_above ? "text-alarm" : s.countdown.hotspot.minutes !== null ? "text-warn" : ""} />
         <HeadStat label="Active alerts" value={active}
           tone={active ? LEVEL[lvl].split(" ")[0] : "text-ok"} />
+        <NameplateSelect kva={kva} setKva={setKva} rated={recorded} />
         <select className="bg-ink border border-edge rounded px-2 py-1 text-sm" value={scenario}
           onChange={(e) => setScenario(e.target.value)}>
           {scenarios.map((n) => <option key={n}>{n}</option>)}
@@ -150,8 +134,6 @@ function Trends({ series }) {
     t: hhmm(t), oil: series.oil_c[k], twin: series.pred_oil_c[k], hs: series.hotspot_c[k],
     amb: series.ambient_c[k], res: series.residual_k[k], load: series.K_oil[k] && 100 * series.K_oil[k],
   }));
-  const axis = { stroke: "#7d8a9a", fontSize: 10 };
-  const tip = { contentStyle: { background: "#121821", border: "1px solid #1f2a37", fontSize: 11 } };
   return (
     <Panel title="Trends · last 48 h">
       <ResponsiveContainer width="100%" height={210}>
@@ -266,22 +248,8 @@ function Comparison({ s }) {
 
 // ---------------------------------------------------------------- 6. recommendations
 function Recommendations({ s }) {
-  const { hotspot: h, fixed: f } = s.countdown;
-  const cdText = (x) => x.already_above ? "exceeded" : x.minutes !== null ? `${fmt(x.minutes, 0)} min` : "not reached";
   return (
     <Panel title="Recommendations">
-      <div className="grid grid-cols-2 gap-2 mb-3">
-        <div className="bg-ink border border-edge rounded p-2">
-          <div className="text-[10px] uppercase tracking-widest text-dim">Twin limit · hot-spot {h.limit_c} °C</div>
-          <div className={`num text-xl ${h.already_above ? "text-alarm" : h.minutes !== null ? "text-warn" : "text-ok"}`}>{cdText(h)}</div>
-          <div className="num text-[11px] text-dim">settles {fmt(h.settles_at_c)} °C · safe load {fmt(100 * h.safe_load_pu, 0)} %</div>
-        </div>
-        <div className="bg-ink border border-edge rounded p-2">
-          <div className="text-[10px] uppercase tracking-widest text-dim">Existing device · oil {f.limit_c} °C</div>
-          <div className="num text-xl text-dim">{cdText(f)}</div>
-          <div className="num text-[11px] text-dim">ambient {fmt(s.countdown.ambient_c)} °C leaves {fmt(f.limit_c - s.countdown.ambient_c)} K of rise</div>
-        </div>
-      </div>
       <ol className="space-y-2">
         {s.recommendations.map((r, k) => (
           <li key={k} className="text-sm">
@@ -306,23 +274,28 @@ export default function App() {
   const [err, setErr] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(4);
+  const [kva, setKva] = useState(null);          // null = nameplate as recorded
+  const [recorded, setRecorded] = useState(null);
   const inflight = useRef(false);
+  const q = kva ? `&kva=${kva}` : "";
 
   useEffect(() => { api("scenarios").then((d) => setScenarios(d.scenarios)).catch((e) => setErr(String(e))); }, []);
 
   useEffect(() => {
     setS(null); setSeries(null); setTl(null); setPlaying(false);
-    api(`${scenario}/timeline`).then((d) => { setTl(d); setI(0); }).catch((e) => setErr(String(e)));
-  }, [scenario]);
+    api(`${scenario}/timeline?${q}`).then((d) => { setTl(d); setI((x) => x ?? 0); }).catch((e) => setErr(String(e)));
+  }, [scenario, q]);
+  useEffect(() => { setKva(null); setRecorded(null); setI(null); }, [scenario]);
+  useEffect(() => { if (s && !kva) setRecorded(s.nameplate.rating_kva); }, [s, kva]);
 
   const load = useCallback((idx) => {
     if (inflight.current) return;
     inflight.current = true;
-    Promise.all([api(`${scenario}/state?t=${idx}`), api(`${scenario}/series?t=${idx}`)])
+    Promise.all([api(`${scenario}/state?t=${idx}${q}`), api(`${scenario}/series?t=${idx}${q}`)])
       .then(([st, se]) => { setS(st); setSeries(se); setErr(null); })
       .catch((e) => setErr(String(e)))
       .finally(() => { inflight.current = false; });
-  }, [scenario]);
+  }, [scenario, q]);
 
   useEffect(() => { if (i !== null) load(i); }, [i, load]);
 
@@ -337,24 +310,35 @@ export default function App() {
 
   return (
     <div className="min-h-screen">
-      <Header s={s} scenarios={scenarios} scenario={scenario} setScenario={setScenario} />
+      <Header s={s} scenarios={scenarios} scenario={scenario} setScenario={setScenario}
+        kva={kva} setKva={setKva} recorded={recorded ?? s.nameplate.rating_kva} />
       <Replay tl={tl} i={i ?? 0} n={s.n} setI={setI} playing={playing} setPlaying={setPlaying}
         speed={speed} setSpeed={setSpeed} />
       <main className="p-3 grid gap-3 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-3">
+          <Countdown s={s} />
           <Gauges s={s} />
           <Trends series={series} />
+          <Cooling s={s} series={series} />
         </div>
         <div className="space-y-3">
           <Recommendations s={s} />
           <Health h={s.health} />
+          <Life s={s} />
+          <Channels s={s} />
         </div>
         <div className="lg:col-span-2">
           <Alerts live={s.alerts_live} recent={s.alerts_recent} />
         </div>
-        <div>
+        <div className="space-y-3">
           <Comparison s={s} />
+          <AmbientTable s={s} />
         </div>
+        <div className="lg:col-span-3">
+          <WhatIf scenario={scenario} kva={kva} i={s.i} s={s} />
+        </div>
+        <div className="lg:col-span-2"><Gprs s={s} /></div>
+        <div><SelfTest kva={kva ?? s.nameplate.rating_kva} /></div>
       </main>
     </div>
   );
