@@ -386,6 +386,7 @@ class Twin:
             "alerts_live": [{**_alert_json(a), "headline": self._headline(a, row)}
                             for a in sorted(live, key=_urgency)],
             "alerts_recent": [_alert_json(a) for a in recent],
+            "alert_groups": self._groups(ts),
             "reference": {"fixed_trip_active": bool(ref),
                           "since": ref[0]["start"].isoformat() if ref else None,
                           "trip_episodes_24h": trips_24h,
@@ -395,6 +396,30 @@ class Twin:
             "ambient_table": self.ambient_table(i),
             "gprs": self.gprs_payload(i, live, cd),
         }
+
+    def _groups(self, ts, limit=12):
+        """Repeated episodes of the same fault collapsed into one entry, as
+        known at ts: an episode still running at ts has no end yet."""
+        groups = {}
+        for a in self.alerts:
+            if a["start"] > ts:
+                break
+            g = groups.setdefault((a["kind"], a["what"]), {
+                "kind": a["kind"], "what": a["what"], "family": a["family"], "episodes": []})
+            active = a["end"] >= ts
+            g["episodes"].append({"start": a["start"].isoformat(),
+                                  "end": None if active else a["end"].isoformat(), "active": active})
+            g.update(level=a["level"], why=a["why"], action=a["action"])   # latest episode
+        out = []
+        for g in groups.values():
+            ep = g["episodes"]
+            g.update(count=len(ep), first=ep[0]["start"], last=ep[-1]["end"] or ep[-1]["start"],
+                     active=any(e["active"] for e in ep))
+            g["episodes"] = ep[::-1]
+            out.append(g)
+        act = [g for g in out if g["active"]]
+        old = sorted([g for g in out if not g["active"]], key=lambda g: g["last"], reverse=True)
+        return (act + old)[:limit]
 
     SHORT = {"cooling": "inspect radiators, oil level and fans",
              "temp_offset": "recalibrate the probe; do not dispatch",

@@ -7,9 +7,9 @@ import {
 // recommendations. A replay cursor drives all of them: the twin answers as of
 // the selected instant, using only data up to it.
 
-import { api, axis, band, BG, BORDER, fmt, hhmm, LEVEL, Panel, TEXT, tip, ttt } from "./ui.jsx";
+import { api, axis, band, BG, BORDER, Fold, fmt, hhmm, LEVEL, Panel, TEXT, tip, ttt } from "./ui.jsx";
 import {
-  AmbientTable, Channels, Cooling, Countdown, Gprs, Life, NameplateSelect, SelfTest, WhatIf,
+  AmbientTable, ChannelGrid, Cooling, Countdown, Gprs, Life, NameplateSelect, SelfTest, untrusted, WhatIf,
 } from "./features.jsx";
 
 // ---------------------------------------------------------------- 1. header
@@ -98,7 +98,6 @@ function Tile({ label, value, unit, sub, b }) {
 
 function Gauges({ s }) {
   const r = s.readings;
-  const chBad = Object.entries(r.channels).filter(([, v]) => !["ok", "step"].includes(v));
   const sc = Object.fromEntries(s.health.components.map((c) => [c.key, band(c.score)]));
   const res = Math.abs(r.residual_k ?? 0);
   return (
@@ -118,10 +117,10 @@ function Gauges({ s }) {
         <div className="text-dim">I&nbsp; {["IR", "IY", "IB"].map((c) => `${c} ${fmt(r.currents_a[c])}`).join("  ")} A</div>
         <div className="text-dim">V&nbsp; {["VR", "VY", "VB"].map((c) => `${c} ${fmt(r.voltages_v[c])}`).join("  ")} V</div>
       </div>
-      <div className="mt-1 text-xs">
-        {chBad.length === 0
+      <div className="mt-2 text-xs">
+        {untrusted(s).length === 0
           ? <span className="text-ok">All 8 channels trusted</span>
-          : chBad.map(([c, v]) => <span key={c} className="text-warn mr-3">{c}: {v}</span>)}
+          : <ChannelGrid s={s} />}
       </div>
     </Panel>
   );
@@ -170,9 +169,18 @@ function Trends({ series }) {
 }
 
 // ---------------------------------------------------------------- 4. health
-function Health({ h }) {
+function Health({ h, lvl }) {
+  const worst = [...h.components].sort((a, b) => (a.score ?? 0) - (b.score ?? 0))[0];
+  const wb = band(worst.score) ?? "alarm";
+  const ib = ["alarm", "warn", "ok"].find((x) => x === band(h.index) || x === lvl);
+  const summary = (
+    <span className="num">
+      <b className={ib === "ok" ? "" : TEXT[ib]}>{fmt(h.index, 0)}/100</b>
+      {wb !== "ok" && <span className={TEXT[wb]}> · {worst.label} {fmt(worst.score, 0)}</span>}
+    </span>
+  );
   return (
-    <Panel title="Health breakdown">
+    <Fold title="Health breakdown" summary={summary}>
       <div className="space-y-2">
         {h.components.map((c) => {
           const b = band(c.score) ?? "alarm";
@@ -194,29 +202,41 @@ function Health({ h }) {
         Each score is the quantity its alarm fires on: 0 = that alarm's threshold, 100 = healthy
         behaviour. Linear between (ageing on log₂). Index = weighted mean.
       </div>
-    </Panel>
+    </Fold>
   );
 }
 
 // ---------------------------------------------------------------- 5. alerts
-function Alerts({ live, recent }) {
-  const liveKeys = new Set(live.map((a) => a.start + a.what));
-  const shown = recent;
+function Alerts({ groups }) {
+  const [open, setOpen] = useState({});
+  const toggle = (k) => setOpen((o) => ({ ...o, [k]: !o[k] }));
   return (
-    <Panel title="Alert feed" className="overflow-auto max-h-[420px]">
-      {shown.length === 0 && <div className="text-dim text-sm">No alerts.</div>}
+    <Panel title="Alert feed · repeats grouped" className="overflow-auto max-h-[420px]">
+      {groups.length === 0 && <div className="text-dim text-sm">No alerts.</div>}
       <ul className="space-y-2">
-        {shown.map((a, k) => {
-          const on = liveKeys.has(a.start + a.what);
+        {groups.map((g) => {
+          const k = g.kind + g.what;
           return (
-            <li key={k} className={`border-l-2 pl-2 ${LEVEL[a.level]} ${on ? "" : "opacity-50"}`}>
-              <div className="flex justify-between text-sm">
-                <span className="font-semibold">{a.what}</span>
-                <span className="num text-[11px] text-dim">{hhmm(a.start)}{on ? " · active" : ` → ${hhmm(a.end)}`}</span>
-              </div>
-              <div className="text-[11px] uppercase tracking-wider text-dim">{a.family}</div>
-              <div className="text-xs text-fg/80"><b className="text-dim">Why </b>{a.why}</div>
-              <div className="text-xs text-fg/80"><b className="text-dim">Do </b>{a.action}</div>
+            <li key={k} className={`border-l-2 pl-2 ${LEVEL[g.level]} ${g.active ? "" : "opacity-50"}`}>
+              <button className="w-full flex justify-between text-sm text-left" onClick={() => toggle(k)}>
+                <span className="font-semibold">
+                  {g.count > 1 ? (open[k] ? "▾ " : "▸ ") : ""}{g.what}
+                  {g.count > 1 && <span className="num font-normal text-dim"> ×{g.count}</span>}
+                </span>
+                <span className="num text-[11px] text-dim">
+                  {hhmm(g.first)}{g.count > 1 || !g.active ? ` → ${g.active ? "now" : hhmm(g.last)}` : ""}{g.active ? " · active" : ""}
+                </span>
+              </button>
+              <div className="text-[11px] uppercase tracking-wider text-dim">{g.family}</div>
+              <div className="text-xs text-fg/80"><b className="text-dim">Why </b>{g.why}</div>
+              <div className="text-xs text-fg/80"><b className="text-dim">Do </b>{g.action}</div>
+              {open[k] && (
+                <ul className="num text-[11px] text-dim mt-1 ml-3">
+                  {g.episodes.map((e, j) => (
+                    <li key={j}>{hhmm(e.start)} → {e.active ? <span className={TEXT[g.level === "alarm" ? "alarm" : "warn"]}>active</span> : hhmm(e.end)}</li>
+                  ))}
+                </ul>
+              )}
             </li>
           );
         })}
@@ -229,6 +249,7 @@ function Alerts({ live, recent }) {
 // alert: it does not count toward status, the alert total or the health index.
 function Comparison({ s }) {
   const f = s.countdown.fixed, ref = s.reference;
+  const [table, setTable] = useState(false);
   return (
     <Panel title="Comparison · existing device (not an alert)">
       <div className="text-sm">
@@ -244,6 +265,10 @@ function Comparison({ s }) {
         {s.alerts_live.length ? s.alerts_live.map((a) => a.what).join("; ") : "no fault"}</span>.
         An absolute oil threshold carries the ambient inside it; the twin judges rise over ambient.
       </div>
+      <button className="text-[11px] text-accent mt-2" onClick={() => setTable(!table)}>
+        {table ? "▾ hide" : "▸ show"} protection-setting comparison by ambient
+      </button>
+      {table && <AmbientTable s={s} />}
     </Panel>
   );
 }
@@ -325,16 +350,14 @@ export default function App() {
         </div>
         <div className="space-y-3">
           <Recommendations s={s} />
-          <Health h={s.health} />
+          <Health h={s.health} lvl={s.status.level} />
           <Life s={s} />
-          <Channels s={s} />
         </div>
         <div className="lg:col-span-2">
-          <Alerts live={s.alerts_live} recent={s.alerts_recent} />
+          <Alerts groups={s.alert_groups} />
         </div>
-        <div className="space-y-3">
+        <div>
           <Comparison s={s} />
-          <AmbientTable s={s} />
         </div>
         <div className="lg:col-span-3">
           <WhatIf scenario={scenario} kva={kva} i={s.i} s={s} />

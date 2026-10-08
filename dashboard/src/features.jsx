@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { api, axis, fmt, LEVEL, Panel, tip, ttt } from "./ui.jsx";
+import { api, axis, Fold, fmt, LEVEL, Panel, tip, ttt } from "./ui.jsx";
 
 // Day 4 features, in priority order. Every number comes from the engine.
 
@@ -97,6 +97,13 @@ export function Cooling({ s, series }) {
 // ---------------------------------------------------------------- 3. life in rupees
 export function Life({ s }) {
   const L = s.life;
+  const hot = L.last_24h.rate_pu > 1;
+  const summary = (
+    <span className="num">
+      {fmt(L.since_start.aged_h, 1)} aged h · ₹{fmt(L.since_start.inr, 0)} since start
+      <span className={hot ? "text-alarm" : "text-dim"}> · 24 h {fmt(L.last_24h.rate_pu, 2)}×</span>
+    </span>
+  );
   const row = (label, x) => (
     <tr key={label} className="border-t border-edge">
       <td className="py-1 text-dim">{label}</td>
@@ -107,7 +114,7 @@ export function Life({ s }) {
     </tr>
   );
   return (
-    <Panel title="Insulation life consumed">
+    <Fold title="Insulation life" summary={summary}>
       <table className="w-full text-xs">
         <thead><tr className="text-dim"><th className="text-left font-normal">window</th><th className="text-right font-normal">aged</th>
           <th className="text-right font-normal">real</th><th className="text-right font-normal">rate</th><th className="text-right font-normal">value</th></tr></thead>
@@ -116,31 +123,36 @@ export function Life({ s }) {
       <div className="num text-[11px] text-dim mt-2">
         ₹{fmt(L.replacement_cost_inr, 0)} ÷ {fmt(L.normal_life_hours, 0)} h rated life = ₹{fmt(L.cost_per_aged_hour_inr, 2)} per aged hour (IEEE C57.91)
       </div>
-    </Panel>
+    </Fold>
   );
 }
 
 // ---------------------------------------------------------------- 4. sensor isolation
-export function Channels({ s }) {
-  const ch = s.readings.channels;
+// Rendered inside Live readings, and only when some channel is not trusted.
+export function untrusted(s) {
   const sus = new Set((s.status.suspect_channels || "").split(",").filter(Boolean));
-  const tone = (c, v) => (sus.has(c) || !["ok", "step"].includes(v) ? "border-warn text-warn" : "border-edge text-ok");
-  const state = (c, v) => (!["ok", "step"].includes(v) ? v : sus.has(c) ? "offset" : "trusted");
+  return Object.entries(s.readings.channels)
+    .filter(([c, v]) => sus.has(c) || !["ok", "step"].includes(v))
+    .map(([c, v]) => [c, ["ok", "step"].includes(v) ? "offset" : v]);
+}
+
+export function ChannelGrid({ s }) {
+  const bad = Object.fromEntries(untrusted(s));
   return (
-    <Panel title="Sensor isolation · per channel">
-      <div className="grid grid-cols-4 gap-1">
-        {Object.entries(ch).map(([c, v]) => (
-          <div key={c} className={`border rounded px-1 py-1 text-center ${tone(c, v)}`}>
-            <div className="num text-xs">{c.replace("_temp", "")}</div>
-            <div className="text-[10px] uppercase">{state(c, v)}</div>
+    <div>
+      <div className="grid grid-cols-8 gap-1">
+        {Object.keys(s.readings.channels).map((c) => (
+          <div key={c} className={`border rounded px-1 py-0.5 text-center ${bad[c] ? "border-warn text-warn border-2" : "border-edge text-dim"}`}>
+            <div className="num text-[11px]">{c.replace("_temp", "")}</div>
+            <div className="text-[9px] uppercase">{bad[c] || "trusted"}</div>
           </div>
         ))}
       </div>
-      <div className="text-[11px] text-dim mt-2">
-        {sus.size ? `Suspect: ${[...sus].join(", ")}. Transformer diagnosis uses the remaining channels; a failed phase current is rebuilt from the others.`
-          : "Every channel agrees with the other phases and with the thermal twin."}
+      <div className="text-[11px] text-dim mt-1">
+        Suspect: {Object.keys(bad).join(", ")}. Transformer diagnosis uses the remaining channels; a failed
+        phase current is rebuilt from the other two.
       </div>
-    </Panel>
+    </div>
   );
 }
 
@@ -148,7 +160,7 @@ export function Channels({ s }) {
 export function AmbientTable({ s }) {
   const A = s.ambient_table;
   return (
-    <Panel title="Protection setting · load each philosophy permits">
+    <div className="mt-2">
       <table className="w-full text-xs">
         <thead><tr className="text-dim">
           <th className="text-left font-normal">ambient</th>
@@ -172,7 +184,7 @@ export function AmbientTable({ s }) {
         rise over measured ambient ({A.rise_trip_k} K keeps the protection the {A.fixed_trip_c} °C setting gives at 30 °C),
         or on hot-spot, which the twin computes.
       </div>
-    </Panel>
+    </div>
   );
 }
 
