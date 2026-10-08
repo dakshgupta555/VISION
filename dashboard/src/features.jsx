@@ -292,3 +292,50 @@ export function NameplateSelect({ kva, setKva, rated }) {
     </label>
   );
 }
+
+// ---------------------------------------------------------------- notifications
+const TIER_TONE = { P1: "text-alarm border-alarm", P2: "text-warn border-warn", P3: "text-accent border-accent", DIGEST: "text-dim border-edge" };
+
+export function Notifications({ scenario, kva, i }) {
+  const [d, setD] = useState(null);
+  const [open, setOpen] = useState(null);
+  useEffect(() => {
+    api(`${scenario}/notifications?t=${i}${kva ? `&kva=${kva}` : ""}`).then(setD).catch(() => {});
+  }, [scenario, kva, i]);
+  if (!d) return <Panel title="Notifications sent">loading…</Panel>;
+  const shown = d.entries;
+  return (
+    <Panel title="Notifications sent" className="overflow-auto max-h-[420px]"
+      right={<span className="text-[10px] text-warn">{d.mode === "replay" ? "REPLAY · outbox only, no real email/SMS" : "LIVE"}</span>}>
+      <div className="text-[11px] text-dim mb-2">
+        {shown.length} shown up to the cursor · {d.total_planned} planned for the whole record from {d.episodes} alert episodes ·
+        SMTP {d.smtp_configured ? "configured" : "not configured"} · outbox <span className="num">{d.outbox.split("/").slice(-2).join("/")}</span>
+      </div>
+      {shown.length === 0 && <div className="text-sm text-dim">Nothing sent yet.</div>}
+      <table className="w-full text-xs">
+        <tbody>
+          {shown.map((m) => (
+            <tr key={m.id} className="border-t border-edge align-top cursor-pointer" onClick={() => setOpen(open === m.id ? null : m.id)}>
+              <td className="num py-1 pr-2 whitespace-nowrap text-dim">{m.time.slice(5, 16).replace("T", " ")}</td>
+              <td className="pr-2"><span className={`border rounded px-1 num ${TIER_TONE[m.tier] || ""}`}>{m.tier}</span></td>
+              <td className="pr-2 num">{m.type}</td>
+              <td className="pr-2">{m.recipient_name}<div className="text-[10px] text-dim">{m.channel} → {m.delivered_via}</div></td>
+              <td>
+                {m.reason}
+                {m.attach_pdf && (m.meta.attachment_status === "ready"
+                  ? <a className="text-accent ml-2" onClick={(e) => e.stopPropagation()}
+                      href={`/api/${scenario}/outbox/${m.attachment.split("/").pop()}${kva ? `?kva=${kva}` : ""}`}>PDF</a>
+                  : <span className="text-dim ml-2">PDF {m.meta.attachment_status}</span>)}
+                {open === m.id && (
+                  <pre className="whitespace-pre-wrap text-[11px] text-fg/80 bg-ink border border-edge rounded p-2 mt-1">
+{`Subject: ${m.subject}\n\n${m.body}\n\nSMS: ${m.sms}\n${m.note}`}
+                  </pre>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </Panel>
+  );
+}

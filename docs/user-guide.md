@@ -86,6 +86,43 @@ dashboard banner says which diagnoses are off. Without ambient, the cooling and
 probe-offset diagnoses are off; hot-spot and ageing still work from measured
 oil.
 
+## Notifications
+
+Escalation rules and recipients live in `config/escalation.json` (YAML also
+works if PyYAML is installed). The addresses shipped there are placeholders.
+
+| Tier | Meaning | Who, how, when |
+|---|---|---|
+| P1 | alarm on the asset (cooling degraded, overload) | site engineer by SMS at once, maintenance head by email with PDF; escalates to the maintenance head by SMS after 4 h |
+| P2 | attention on the asset (unbalance growing) | site engineer by email with PDF, next working morning; escalates after 48 h |
+| P3 | instrument fault or model mismatch | instrumentation team by email only, after 30 min; the message says *do not send a crew for a transformer fault* |
+| Daily | digest | one PDF summary at 07:00 to the control room and maintenance head |
+
+A fault that re-fires within 8 h of clearing is the same incident: one notice
+when it opens, one escalation if it persists, one when it has stayed clear for
+8 h.
+
+The dashboard's **Notifications sent** panel shows what was sent up to the
+replay cursor; click a row for the full message. Everything in the dashboard is
+a **replay**: messages go to `outbox/<scenario>/` (text, JSON, and the PDF in
+`pdf/`), never to real email or SMS.
+
+    python -m dtwin.notify plan showcase              # what would be sent, writes nothing
+    python -m dtwin.notify replay showcase --reset    # fill the outbox for the whole record
+
+Real delivery uses environment variables only; nothing is stored in files.
+
+    DTWIN_SMTP_HOST, DTWIN_SMTP_PORT (587), DTWIN_SMTP_USER, DTWIN_SMTP_PASSWORD,
+    DTWIN_SMTP_FROM, DTWIN_SMTP_TLS (1)
+    DTWIN_SMS_GATEWAY_URL, DTWIN_SMS_GATEWAY_TOKEN
+    DTWIN_NOTIFY_LIVE=1        # required before anything can be sent for real
+
+    python -m dtwin.notify test-email you@example.com   # one real test message
+
+If SMTP or the SMS gateway is not configured, messages stay in the outbox and
+say so. Live mode also refuses events older than 30 minutes, so it cannot
+replay history to real recipients.
+
 ## Reports from the command line
 
     python -m dtwin.report <name>                         # as of the last sample
@@ -98,6 +135,7 @@ oil.
     python evaluate.py --set heldout     # held-out scoring
     python check_time_term.py            # drift term vs real cooling faults
     python check_ingest.py               # 22 mangled CSVs must load and diagnose
+    python check_notify.py               # debounce and the replay guard, attacked
 
 ## Regenerate simulated data
 

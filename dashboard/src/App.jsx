@@ -9,7 +9,8 @@ import {
 
 import { api, axis, band, BG, BORDER, Fold, fmt, hhmm, LEVEL, Panel, TEXT, tip, ttt } from "./ui.jsx";
 import {
-  AmbientTable, ChannelGrid, Cooling, Countdown, Gprs, Life, NameplateSelect, SelfTest, untrusted, WhatIf,
+  AmbientTable, ChannelGrid, Cooling, Countdown, Gprs, Life, NameplateSelect, Notifications, SelfTest, untrusted,
+  WhatIf,
 } from "./features.jsx";
 
 // ---------------------------------------------------------------- 1. header
@@ -363,8 +364,9 @@ export default function App() {
           <Health h={s.health} lvl={s.status.level} />
           <Life s={s} />
         </div>
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-3">
           <Alerts groups={s.alert_groups} />
+          <Notifications scenario={scenario} kva={kva} i={s.i} />
         </div>
         <div>
           <Comparison s={s} />

@@ -51,6 +51,17 @@ most likely to be wrong on CPRI's data are marked **risk**.
 | Projections hold load and ambient constant | no load forecast is used | Real afternoons warm up; the countdown is a "at present conditions" figure and is labelled so. |
 | **risk** GPRS payload format | CPRI's message format is not in hand | The preview is an assumed comma-separated frame; field order will be matched once their format is known. |
 
+## Notifications
+
+| Assumption | Why | If wrong |
+|---|---|---|
+| **risk** Recipients in `config/escalation.json` are placeholders | real contacts are CPRI's to give | Nothing reaches anyone until they are replaced and live mode is enabled. |
+| Clear hold-off 8 h | showcase re-fires within 0.5-6.5 h (same fault); overloads 20 h apart are separate evenings | A shorter hold-off sends more open/clear pairs for a flickering fault; a longer one merges separate events. |
+| P1 escalates after 4 h, P2 after 48 h, P3 after 24 h | an alarm unanswered for half a shift should reach the next level | Set per tier in the config. |
+| P2 waits for the next working morning (Mon-Sat, 09:00) | attention items are not night call-outs | Set `working_days` and `working_hour`. |
+| P3 needs 30 min before notifying | dead-channel blips of one or two samples are logger noise | A real 20-minute sensor fault is not notified (it still shows on the dashboard). |
+| Live mode only sends events less than 30 minutes old | a historical file must never reach a real recipient | A delayed live feed would outbox rather than send; raise `live_window_min`. |
+
 ## Simulator (development only)
 
 Jaipur-like summer ambient (34 C mean, 9 K swing), a mixed feeder load shape

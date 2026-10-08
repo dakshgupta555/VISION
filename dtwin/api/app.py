@@ -11,7 +11,10 @@ Truth files are never read here.
 
 from typing import Optional, Union
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Response
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .engine import get_twin, scenarios, selftest
@@ -85,6 +88,38 @@ def report_pdf(name: str, t: Optional[str] = None, kva: Optional[float] = None):
     stamp = tw.rows.index[tw.locate(_cursor(t))].strftime("%Y%m%d_%H%M")
     return Response(pdf, media_type="application/pdf", headers={
         "Content-Disposition": f'attachment; filename="{tw.np_.tag}_{name}_{stamp}.pdf"'})
+
+
+_DISPATCHERS = {}
+
+
+def _dispatcher(name, kva):
+    """Replay dispatchers only. The API has no way to construct a live one:
+    scrubbing history can never reach a real recipient."""
+    key = (name, kva)
+    if key not in _DISPATCHERS:
+        from ..notify.dispatch import Dispatcher
+        _DISPATCHERS[key] = Dispatcher(_twin(name, kva), mode="replay")
+    return _DISPATCHERS[key]
+
+
+@app.get("/api/{name}/notifications")
+def notifications(name: str, t: Optional[str] = None, kva: Optional[float] = None, limit: int = 40):
+    tw = _twin(name, kva)
+    d = _dispatcher(name, kva)
+    upto = tw.rows.index[tw.locate(_cursor(t))]
+    d.process(upto)
+    return {**d.status(), "upto": upto.isoformat(), "entries": d.feed(upto, limit),
+            "total_planned": len(d.events), "episodes": len(tw.alerts)}
+
+
+@app.get("/api/{name}/outbox/{file}")
+def outbox_file(name: str, file: str, kva: Optional[float] = None):
+    folder = _dispatcher(name, kva).outbox.folder / "pdf"
+    p = folder / Path(file).name                    # no path traversal
+    if not p.exists():
+        raise HTTPException(404, "attachment not rendered yet")
+    return FileResponse(p, media_type="application/pdf", filename=p.name)
 
 
 @app.get("/api/{name}/alerts")

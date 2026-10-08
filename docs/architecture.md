@@ -98,7 +98,22 @@ fault-injection self-test. `app.py` exposes it:
 | `GET /api/{name}/whatif?t=&load=&ambient=&cf=` | projection under a held load, ambient, cooling factor |
 | `GET /api/{name}/ingest` | the full mapping report |
 | `GET /api/{name}/report.pdf?t=` | the PDF condition report as of `t` |
+| `GET /api/{name}/notifications?t=` | delivers due events to the outbox (replay), returns the feed up to `t` |
+| `GET /api/{name}/outbox/{file}` | a rendered PDF attachment |
 | `GET /api/selftest?kva=` | measured minimum detectable cooling degradation |
+
+### Notifications — `dtwin/notify/`
+
+`policy.py` turns alert episodes into incidents (episodes of the same fault
+merge unless it stays clear for the hold-off) and incidents into timed events:
+OPEN, ESCALATE, CLEAR, plus a daily DIGEST. Every event is causal, so at any
+replay cursor the past events are what a live system would have sent.
+`notifiers.py` is the delivery interface with three implementations: outbox
+(default), SMTP, GPRS/SMS. `dispatch.py` composes each message from the twin's
+state at the event's own time and routes it. Replay guard in three layers: the
+API only constructs replay dispatchers; replay routes every channel to the
+outbox; real notifiers refuse any replay message. Live mode needs
+`DTWIN_NOTIFY_LIVE=1` and only sends events from the last 30 minutes.
 
 ### Report — `dtwin/report.py`
 
@@ -125,3 +140,4 @@ engine, API and dashboard never see them. Scoring scripts:
 | `evaluate.py [--set heldout]` | detection, severity at detection, diagnosis, false alarms |
 | `check_time_term.py` | the drift term does not absorb real cooling faults |
 | `check_ingest.py` | 22 mangled variants of `showcase.csv` load and still diagnose |
+| `check_notify.py` | debounce, and the replay guard attacked with live credentials set |

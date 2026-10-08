@@ -1,0 +1,68 @@
+{
+  "_comment": "Who hears about what, how fast. Addresses are placeholders: replace before going live. Credentials never go here - SMTP and SMS gateway settings come from environment variables (see docs/user-guide.md).",
+
+  "recipients": {
+    "site_engineer":    {"name": "Site engineer",          "email": "site.engineer@example.com",    "sms": "+910000000001"},
+    "maintenance_head": {"name": "Maintenance head",       "email": "maintenance.head@example.com", "sms": "+910000000002"},
+    "instrumentation":  {"name": "Instrumentation team",   "email": "instrumentation@example.com"},
+    "control_room":     {"name": "Control room (digest)",  "email": "control.room@example.com"}
+  },
+
+  "tiers": {
+    "P1": {
+      "_means": "alarm on the asset: cooling degraded, overload",
+      "when": "immediate",
+      "notify": [
+        {"to": "site_engineer",    "channel": "sms"},
+        {"to": "maintenance_head", "channel": "email", "attach_pdf": true}
+      ],
+      "escalate_after_h": 4,
+      "escalate_to": [
+        {"to": "maintenance_head", "channel": "sms"}
+      ],
+      "notify_clear": true
+    },
+    "P2": {
+      "_means": "attention on the asset: phase unbalance growing",
+      "when": "next_working_day",
+      "notify": [
+        {"to": "site_engineer", "channel": "email", "attach_pdf": true}
+      ],
+      "escalate_after_h": 48,
+      "escalate_to": [
+        {"to": "maintenance_head", "channel": "email", "attach_pdf": true}
+      ],
+      "notify_clear": true
+    },
+    "P3": {
+      "_means": "instrument fault: probe offset, dead/stuck/disagreeing channel, model mismatch. NOT a dispatch.",
+      "when": "immediate",
+      "min_duration_min": 30,
+      "notify": [
+        {"to": "instrumentation", "channel": "email"}
+      ],
+      "escalate_after_h": 24,
+      "escalate_to": [
+        {"to": "instrumentation", "channel": "email"}
+      ],
+      "notify_clear": true
+    }
+  },
+
+  "debounce": {
+    "_why": "showcase re-fires: unbalance gaps 0.5-6.5 h, cooling 4.2 h (same fault); overloads 20 h apart (separate evenings). 8 h merges the first and keeps the second separate.",
+    "clear_holdoff_h": 8
+  },
+
+  "digest": {
+    "hour": 7,
+    "to": [
+      {"to": "control_room",     "channel": "email", "attach_pdf": true},
+      {"to": "maintenance_head", "channel": "email", "attach_pdf": true}
+    ]
+  },
+
+  "working_days": [0, 1, 2, 3, 4, 5],
+  "working_hour": 9,
+  "outbox": "outbox"
+}

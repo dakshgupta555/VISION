@@ -63,6 +63,20 @@ These mangles were written by the same people who wrote the ingestion layer,
 against the same schema. Blind mangles from someone else are the closer
 analogue to an unseen file.
 
+## Notifications — `python check_notify.py`
+
+**11 of 11.** A fault re-firing 10 times inside the hold-off sends one OPEN, one
+ESCALATE and one CLEAR per recipient. On showcase, 14 alert episodes become 10
+incidents and 33 alert notices, plus a daily digest. With SMTP credentials set,
+`DTWIN_NOTIFY_LIVE=1` set and every network call rigged to raise, a full replay
+and the API endpoint make zero network attempts; real notifiers refuse replay
+messages even when called directly; live mode refuses to start without the
+flag and sends nothing from a historical file; with "now" at the event time the
+real path sends an email carrying the PDF and a 160-character SMS; with SMTP
+unset it falls back to the outbox and says so; every P3 says "do not send a
+crew" and no P1/P2 does. A mutation test (guard deliberately broken) produced
+10 network attempts, so the replay check does catch a leak.
+
 ## Finding — a fixed oil trip is ambient-blind
 
 Steady load a fixed 60 C oil trip permits, against the twin's hot-spot limit:
