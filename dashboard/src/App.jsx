@@ -339,6 +339,12 @@ export default function App() {
     <div className="min-h-screen">
       <Header s={s} scenarios={scenarios} scenario={scenario} setScenario={setScenario}
         kva={kva} setKva={setKva} recorded={recorded ?? s.nameplate.rating_kva} />
+      {s.data_source.warnings.length > 0 && (
+        <div className="px-4 py-1.5 border-b border-warn bg-warn/10 text-xs text-warn">
+          <b>Data source:</b> {s.data_source.warnings.join(" · ")}
+          <span className="text-dim"> — see the mapping report: python -m dtwin.ingest data/{scenario}.csv</span>
+        </div>
+      )}
       <Replay tl={tl} i={i ?? 0} n={s.n} setI={setI} playing={playing} setPlaying={setPlaying}
         speed={speed} setSpeed={setSpeed} />
       <main className="p-3 grid gap-3 lg:grid-cols-3">

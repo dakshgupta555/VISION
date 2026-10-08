@@ -1,0 +1,25 @@
+           case load mapping values                                diagnosis rows                   notes
+         rename   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+units_magnitude   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+    units_named   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+        shuffle   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+          holes   ok      ok     ok         ok: cooling caught, drift sensor   ok             filled 2308
+         hourly   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+   drop_ambient   ok      ok     ok ok: thermal unavailable, overload caught   ok absent ['ambient_temp']
+     duplicates   ok      ok     ok         ok: cooling caught, drift sensor   ok             dropped 202
+           ddmm   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+           mmdd   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+           junk   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+        generic   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+      semicolon   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+semicolon_comma   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+       preamble   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+          epoch   ok      ok     ok         ok: cooling caught, drift sensor   ok           epoch seconds
+ split_datetime   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+           l123   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+      line_line   ok      ok     ok         ok: cooling caught, drift sensor   ok                        
+         jitter   ok      ok     ok         ok: cooling caught, drift sensor   ok     resampled to 15 min
+     blank_rows   ok      ok     ok         ok: cooling caught, drift sensor   ok              dropped 31
+     everything   ok      ok     ok         ok: cooling caught, drift sensor   ok             filled 2240
+
+  22 / 22 cases pass every check   (files in /var/folders/7m/k3ns3yh16ml0q2ptpyjktfcc0000gn/T/ingest_gfe4l_82)

@@ -201,7 +201,7 @@ def _leave_one_out(block: pd.DataFrame, bad: dict, ref, smooth):
     return dev, pair, standing
 
 
-def cross_phase(df, bad, cfg: ValidationConfig):
+def cross_phase(df, bad, cfg: ValidationConfig, volts_known=True):
     """Separate a lying CT or VT from genuine unbalance.
 
     Returns per-row electrical status, the set of suspect channels per row, and
@@ -226,6 +226,8 @@ def cross_phase(df, bad, cfg: ValidationConfig):
             continue                     # already explained by tier 1
         lone = abs(pi.iloc[i, k]) < cfg.pair_agree_tol
         v_dev = abs(dv.iloc[i, k]) if np.isfinite(dv.iloc[i, k]) else 0.0
+        if not volts_known:
+            v_dev = np.inf               # cannot clear the CT without voltages: call it load
         if lone and v_dev < cfg.voltage_corroborate:
             status[i] = f"sensor_ct:{ch_i}"
             suspect[ch_i][i] = True
@@ -233,7 +235,7 @@ def cross_phase(df, bad, cfg: ValidationConfig):
             status[i] = "asset_unbalance"
 
     adv = dv.abs().values
-    for i in np.where(~current_moved)[0]:
+    for i in (np.where(~current_moved)[0] if volts_known else []):
         row = np.where(np.isfinite(adv[i]), adv[i], 0)
         k = int(np.argmax(row))
         if row[k] > cfg.voltage_dev_limit and abs(pv.iloc[i, k]) < cfg.pair_agree_tol \
@@ -294,6 +296,11 @@ def rolling_rise_fit(index, pred_rise, meas_rise, valid, cfg: ValidationConfig,
     Huber rather than least squares so a handful of outliers cannot drag the fit.
     """
     win = pd.Timedelta(hours=cfg.fit_window_h)
+    # at coarse cadence a 24 h window holds few samples; ask for 3/4 of them,
+    # never more than fit_min_points (unchanged at 45-min cadence or finer)
+    step_min = float(np.median(np.diff(index.values).astype("timedelta64[s]").astype(float))) / 60.0 \
+        if len(index) > 1 else 15.0
+    min_pts = min(cfg.fit_min_points, max(8, int(0.75 * cfg.fit_window_h * 60.0 / step_min)))
     times = pd.date_range(index[0] + win, index[-1], freq=pd.Timedelta(hours=cfg.fit_step_h))
     reset_pos = np.where(resets)[0] if resets is not None else np.array([], int)
     t_days = (index - index[0]).total_seconds().values / 86400.0
@@ -311,7 +318,7 @@ def rolling_rise_fit(index, pred_rise, meas_rise, valid, cfg: ValidationConfig,
         x, y = pred_rise[lo:hi][m], meas_rise[lo:hi][m]
         tt = t_days[lo:hi][m] - t_days[hi - 1]
         split = None
-        if cfg.split_test and len(x) >= cfg.fit_min_points:
+        if cfg.split_test and len(x) >= min_pts:
             split = _split_step(x, y, tt, cfg)
         if split is not None:
             keep = tt > split
@@ -319,7 +326,7 @@ def rolling_rise_fit(index, pred_rise, meas_rise, valid, cfg: ValidationConfig,
             x, y, tt = x[keep], y[keep], tt[keep]
         rec = {"fit_time": ts, "slope": np.nan, "intercept": np.nan,
                "drift_k_per_day": np.nan, "n": len(x), "split_step": split is not None}
-        if len(x) >= cfg.fit_min_points and np.std(x) >= cfg.fit_min_spread_k:
+        if len(x) >= min_pts and np.std(x) >= cfg.fit_min_spread_k:
             try:
                 huber.fit(np.column_stack([x, tt]), y)
                 rec["slope"] = float(huber.coef_[0])
@@ -406,17 +413,29 @@ def attribute_offsets(fits, index, steps, cfg: ValidationConfig):
 # --------------------------------------------------------------------------- #
 # Entry point
 # --------------------------------------------------------------------------- #
-def validate(df: pd.DataFrame, np_: Nameplate, cfg: ValidationConfig = None):
+def validate(df: pd.DataFrame, np_: Nameplate, cfg: ValidationConfig = None, absent=()):
     """Run all three tiers. Returns (rows, fits, meta).
 
     rows   one record per input sample: per-channel status, electrical and
            thermal status, predicted oil, residual, and the two alarm flags
     fits   one record per rolling thermal fit
     meta   thresholds actually used, for display and the report
+
+    absent names channels the source file does not have (see dtwin.ingest).
+    They are reported as "absent", never as faults. Missing voltages are taken
+    as nominal and the CT-vs-load check cannot clear a CT; missing oil or
+    ambient switches the thermal diagnosis off ("unavailable"). With nothing
+    absent the behaviour is unchanged.
     """
     cfg = cfg or ValidationConfig()
     df = df.sort_index()
     df = df[~df.index.duplicated(keep="first")]
+    absent = set(absent)
+    if absent & set(VOLTAGES):
+        df = df.copy()
+        for c in absent & set(VOLTAGES):
+            df[c] = np_.voltage_nominal_ln_v
+    thermal_off = bool(absent & {"oil_temp", "ambient_temp"})
     idx = df.index
     n = len(df)
 
@@ -428,10 +447,16 @@ def validate(df: pd.DataFrame, np_: Nameplate, cfg: ValidationConfig = None):
         stuck[ch], need[ch] = stuck_mask(df[ch].values, cfg)
     for ch in TEMPS:
         steps[ch] = step_mask(df[ch].values, cfg)
+    for ch in absent:
+        dead[ch] = np.zeros(n, bool)
+        stuck[ch] = np.zeros(n, bool)
+        if ch in steps:
+            steps[ch] = np.zeros(n, bool)
     bad = {ch: dead[ch] | stuck[ch] for ch in CHANNELS}
 
     # ---- tier 2 -------------------------------------------------------------
-    elec, suspect, s_i, dev_i = cross_phase(df, bad, cfg)
+    elec, suspect, s_i, dev_i = cross_phase(df, bad, cfg,
+                                            volts_known=not (absent & set(VOLTAGES)))
     untrusted = {ch: bad[ch] | suspect.get(ch, np.zeros(n, bool)) for ch in CHANNELS}
     cur, cur_repaired, thermal_ok = repair_currents(df, untrusted, s_i)
     cur = cur.interpolate(limit_direction="both")
@@ -452,7 +477,8 @@ def validate(df: pd.DataFrame, np_: Nameplate, cfg: ValidationConfig = None):
     valid = np.isfinite(meas_rise) & thermal_ok & ~untrusted["ambient_temp"]
 
     temp_step = steps["oil_temp"] | steps["ambient_temp"]
-    fits = rolling_rise_fit(idx, pred_rise, meas_rise, valid, cfg, resets=temp_step)
+    fits = pd.DataFrame() if thermal_off else \
+        rolling_rise_fit(idx, pred_rise, meas_rise, valid, cfg, resets=temp_step)
     if not fits.empty:
         fits = attribute_offsets(fits, idx, steps, cfg)
 
@@ -465,6 +491,8 @@ def validate(df: pd.DataFrame, np_: Nameplate, cfg: ValidationConfig = None):
         st[suspect[ch] if ch in suspect else np.zeros(n, bool)] = "suspect"
         st[stuck[ch]] = "stuck"
         st[dead[ch]] = "dead"
+        if ch in absent:
+            st[:] = "absent"
         rows[f"ch_{ch}"] = st
     rows["elec_status"] = elec
     # largest phase-current deviation from the standing pattern, the quantity
@@ -490,7 +518,7 @@ def validate(df: pd.DataFrame, np_: Nameplate, cfg: ValidationConfig = None):
         rows["offset_channel"] = rows.offset_channel.fillna("")
     else:
         rows["slope"] = rows["intercept"] = rows["drift_k_per_day"] = np.nan
-        rows["thermal_status"] = "insufficient"
+        rows["thermal_status"] = "unavailable" if thermal_off else "insufficient"
         rows["offset_channel"] = ""
 
     # ---- alarms -------------------------------------------------------------

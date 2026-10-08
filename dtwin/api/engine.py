@@ -43,6 +43,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from .. import ingest
 from ..analytics.validation import validate, CHANNELS, ValidationConfig, _runs
 from ..physics import unbalance as ub
 from ..physics.ageing import ageing_factor
@@ -51,7 +52,6 @@ from ..physics.thermal import (ThermalModel, ThermalState, hotspot_rise_ultimate
                                top_oil_rise_ultimate)
 
 DATA = Path(__file__).resolve().parents[2] / "data"
-RATINGS = {"winter_250kva_5min": 250}
 
 _CFG = ValidationConfig()
 HEALTH = [  # key, weight, value-at-100, value-at-0 (= alarm threshold), unit, label
@@ -83,15 +83,21 @@ class Twin:
     rows: pd.DataFrame
     alerts: list = field(default_factory=list)
     reference: list = field(default_factory=list)
+    report: object = None
+    absent: tuple = ()
 
     # ------------------------------------------------------------------ build
     @classmethod
     def from_csv(cls, name: str, rating_kva: float = None):
-        df = pd.read_csv(DATA / f"{name}.csv", parse_dates=["timestamp"], index_col="timestamp")
-        df = df.drop(columns=["transformer_id"], errors="ignore").sort_index()
-        np_ = preset(rating_kva or RATINGS.get(name, 100))
-        rows, fits, meta = validate(df, np_)
-        tw = cls(name, np_, df, rows)
+        """Any CSV, through the defensive ingestion layer. The rating comes from
+        the request, else the file's sidecar or preamble, else an assumption
+        that the report flags."""
+        df, rep = ingest.load(DATA / f"{name}.csv", rating_kva=rating_kva)
+        np_ = preset(rep.nameplate["rating_kva"])
+        if rep.nameplate.get("tag"):
+            np_.tag = rep.nameplate["tag"]
+        rows, fits, meta = validate(df, np_, absent=rep.absent)
+        tw = cls(name, np_, df, rows, report=rep, absent=tuple(rep.absent))
         tw._derive()
         tw.alerts = tw._build_alerts()
         return tw
@@ -115,7 +121,8 @@ class Twin:
         r["dt_h"] = dt_h
         r["aged_h"] = r.faa * r.dt_h
         n_sus = r.suspect_channels.fillna("").map(lambda x: len([c for c in x.split(",") if c]))
-        r["trusted_frac"] = 1.0 - n_sus / len(CHANNELS)
+        self.n_present = len(CHANNELS) - len(self.absent)
+        r["trusted_frac"] = 1.0 - n_sus / self.n_present
         r["oil_c"] = df.oil_temp
         r["ambient_c"] = df.ambient_temp
         r["rise_c"] = df.oil_temp - df.ambient_temp
@@ -210,6 +217,12 @@ class Twin:
         }
         comps, tot, wsum = [], 0.0, 0.0
         for key, wt, good, bad, unit, label in HEALTH:
+            if key == "integrity":            # 0 = one channel short of all present ones
+                bad = 100.0 * (self.n_present - 1) / self.n_present
+            if key == "cooling" and r.thermal_status.iloc[i] == "unavailable":
+                comps.append({"key": key, "label": label + " - unavailable", "value": None,
+                              "unit": unit, "score": None, "weight": wt, "good": good, "bad": bad})
+                continue
             sc = _score(vals[key], good, bad, log2=(key == "ageing"))
             comps.append({"key": key, "label": label, "value": _f(vals[key], 3), "unit": unit,
                           "score": _f(sc, 0), "weight": wt, "good": good, "bad": bad})
@@ -392,10 +405,19 @@ class Twin:
                           "trip_episodes_24h": trips_24h,
                           "note": ref[0]["why"] if ref else None},
             "recommendations": self._recommend(live, cd),
+            "data_source": self.data_source(),
             "life": self.life(i),
             "ambient_table": self.ambient_table(i),
             "gprs": self.gprs_payload(i, live, cd),
         }
+
+    def data_source(self):
+        rep = self.report
+        return {"rating_kva": rep.nameplate.get("rating_kva"), "rating_how": rep.nameplate.get("how"),
+                "absent": rep.absent, "derived": rep.derived, "warnings": rep.warnings,
+                "cadence_min": rep.cadence.get("median_min"),
+                "resampled_to_min": rep.cadence.get("resampled_to_min"),
+                "rows": rep.rows, "thermal_available": not ({"oil_temp", "ambient_temp"} & set(rep.absent))}
 
     def _groups(self, ts, limit=12):
         """Repeated episodes of the same fault collapsed into one entry, as

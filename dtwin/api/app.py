@@ -71,6 +71,12 @@ def ratings():
     return {"ratings": [25, 63, 100, 250], "all_is1180": IS_1180_RATINGS}
 
 
+@app.get("/api/{name}/ingest")
+def ingest_report(name: str, kva: Optional[float] = None):
+    rep = _twin(name, kva).report
+    return {**rep.as_dict(), "text": rep.text()}
+
+
 @app.get("/api/{name}/alerts")
 def alerts(name: str):
     from .engine import _alert_json
