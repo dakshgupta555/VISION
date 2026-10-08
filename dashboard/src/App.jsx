@@ -197,7 +197,8 @@ function Health({ h }) {
           <div key={c.key}>
             <div className="flex justify-between text-xs">
               <span>{c.label} <span className="text-dim">· w {c.weight}</span></span>
-              <span className="num">{fmt(c.value, 2)} {c.unit} → <b>{fmt(c.score, 0)}</b></span>
+              <span className="num">{fmt(c.value, 3)} {c.unit} → <b>{fmt(c.score, 0)}</b>
+                <span className="text-dim"> (100 ≤{c.good} · 0 at {fmt(c.bad, 3)})</span></span>
             </div>
             <div className="h-1.5 bg-ink rounded">
               <div className={`h-1.5 rounded ${tone(c.score ?? 0)}`} style={{ width: `${c.score ?? 0}%` }} />
@@ -206,8 +207,8 @@ function Health({ h }) {
         ))}
       </div>
       <div className="mt-3 text-[11px] text-dim">
-        Index = weighted mean of the scores. Each score is a physical value mapped linearly between its
-        “100” and “0” points (ageing on log₂, since it doubles every ~7 K).
+        Each score is the quantity its alarm fires on: 0 = that alarm's threshold, 100 = healthy
+        behaviour. Linear between (ageing on log₂). Index = weighted mean.
       </div>
     </Panel>
   );

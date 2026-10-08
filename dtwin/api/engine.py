@@ -8,15 +8,25 @@ shows what the twin would have said live at that moment.
 Health index
 ------------
 The brief asks for a 0-100 index, so there is one, but it is only a summary of
-five physical components, each displayed with its own value and unit. The
-weights are a stated judgement, not a fitted result:
+five physical components, each displayed with its own value and unit.
 
-    component        physical quantity (last 24 h unless noted)  100 at   0 at       weight
-    thermal ageing   mean ageing factor F_AA                 <= 1.0 pu    >= 16 pu    0.30
-    cooling          rise-fit slope (1.0 = as designed)      <= 1.03      >= 1.50     0.25
-    loading          peak load ratio K                       <= 0.80 pu   >= 1.50 pu  0.20
-    integrity        share of the 8 channels trusted, last 1 h   100 %    <= 70 %     0.15
-    unbalance        mean current unbalance (NEMA)           <= 2 %       >= 20 %     0.10
+One definition of "bad" in the whole system: every component is scored on the
+SAME quantity, at the same instant, that its alarm or recommendation fires on,
+and scores 0 exactly where that alarm fires. 100 is set from healthy behaviour
+(p95 of data/healthy.csv) where the quantity has scatter, and from physics
+where it does not. Linear in between; ageing on log2 because it doubles every
+~7 K.
+
+    component   quantity (instant unless noted)    100 at          0 at (fires)                    weight
+    ageing      ageing factor F_AA                  <= 1/8 pu       1.0 pu, hot-spot 110 C (shed)   0.30
+    cooling     rise-fit slope                      <= 1.025        1.06 (cooling alarm)            0.25
+    loading     load ratio K                        <= 0.80 pu      1.00 pu (overload alarm)        0.20
+    integrity   channels trusted, last 1 h mean     8 of 8          7 of 8 (sensor alarm)           0.15
+    unbalance   max phase deviation from standing   <= 1.45 %       4.0 % (unbalance/CT call)       0.10
+
+Weights are a stated judgement: ageing and cooling consume insulation life;
+unbalance is lowest because its heating already reaches the ageing component
+through the worst-phase hot-spot.
 
 A channel counts as untrusted when the validator names it suspect for any
 reason - dead, stuck, cross-phase disagreement, or a temperature offset found by
@@ -24,11 +34,6 @@ the thermal fit (both probes when it cannot tell oil from ambient).
 
 The fixed 60 C trip comparison is NOT an alert and does not touch status or
 the index: it is the existing device's behaviour, reported for contrast.
-
-Ageing is scored on log2(F_AA) because ageing doubles every ~7 K: each
-doubling costs 25 points. Ageing and cooling carry the most weight because they
-are what consumes insulation life; unbalance is weighted lowest because its
-thermal effect already appears in the ageing component through the hot-spot.
 """
 
 from dataclasses import dataclass, field
@@ -38,7 +43,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from ..analytics.validation import validate, CHANNELS, _runs
+from ..analytics.validation import validate, CHANNELS, ValidationConfig, _runs
 from ..physics import unbalance as ub
 from ..physics.ageing import ageing_factor
 from ..physics.nameplate import Nameplate, preset
@@ -48,12 +53,13 @@ from ..physics.thermal import (ThermalModel, ThermalState, hotspot_rise_ultimate
 DATA = Path(__file__).resolve().parents[2] / "data"
 RATINGS = {"winter_250kva_5min": 250}
 
-HEALTH = [  # key, weight, value-at-100, value-at-0, unit, label
-    ("ageing", 0.30, 1.0, 16.0, "pu", "Thermal ageing (mean F_AA)"),
-    ("cooling", 0.25, 1.03, 1.50, "", "Cooling (rise-fit slope)"),
-    ("loading", 0.20, 0.80, 1.50, "pu", "Loading (peak K)"),
-    ("integrity", 0.15, 100.0, 70.0, "%", "Measurement integrity"),
-    ("unbalance", 0.10, 2.0, 20.0, "%", "Current unbalance (NEMA)"),
+_CFG = ValidationConfig()
+HEALTH = [  # key, weight, value-at-100, value-at-0 (= alarm threshold), unit, label
+    ("ageing", 0.30, 1.0 / 8, 1.0, "pu", "Thermal ageing (F_AA)"),
+    ("cooling", 0.25, 1.025, 1.0 + _CFG.slope_limit, "", "Cooling (rise-fit slope)"),
+    ("loading", 0.20, 0.80, _CFG.overload_pu, "pu", "Loading (K)"),
+    ("integrity", 0.15, 100.0, 100.0 * 7 / 8, "%", "Measurement integrity (1 h)"),
+    ("unbalance", 0.10, 1.45, 100.0 * _CFG.current_dev_limit, "%", "Phase deviation"),
 ]
 
 
@@ -62,7 +68,7 @@ def _score(v, good, bad, log2=False):
         return None
     if log2:
         v, good, bad = np.log2(max(v, 1e-9)), np.log2(good), np.log2(bad)
-    return float(np.clip(100.0 * (bad - v) / (bad - good), 0.0, 100.0))
+    return float(np.clip(100.0 * (bad - v) / (bad - good), 0.0, 100.0)) + 0.0   # no -0
 
 
 def _f(x, nd=2):
@@ -195,13 +201,12 @@ class Twin:
     def health(self, i):
         r = self.rows
         t = r.index[i]
-        w = r.loc[t - pd.Timedelta(hours=24):t]
         vals = {
-            "ageing": float(w.faa.mean()),
+            "ageing": float(r.faa.iloc[i]),
             "cooling": float(r.slope.iloc[i]) if np.isfinite(r.slope.iloc[i]) else 1.0,
-            "loading": float(w.K_oil.max()),
+            "loading": float(r.K_oil.iloc[i]),
             "integrity": float(100 * r.loc[t - pd.Timedelta(hours=1):t].trusted_frac.mean()),
-            "unbalance": float(w.current_unbalance_pct.mean()),
+            "unbalance": float(r.phase_dev_max_pct.iloc[i]),
         }
         comps, tot, wsum = [], 0.0, 0.0
         for key, wt, good, bad, unit, label in HEALTH:

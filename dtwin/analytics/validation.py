@@ -467,6 +467,9 @@ def validate(df: pd.DataFrame, np_: Nameplate, cfg: ValidationConfig = None):
         st[dead[ch]] = "dead"
         rows[f"ch_{ch}"] = st
     rows["elec_status"] = elec
+    # largest phase-current deviation from the standing pattern, the quantity
+    # the unbalance call is made on (output only; does not feed any decision)
+    rows["phase_dev_max_pct"] = 100.0 * dev_i.abs().max(axis=1).values
     rows["currents_repaired"] = cur_repaired
     rows["K_oil"] = np.asarray(an["K_oil"])
     rows["K_winding"] = np.asarray(an["K_winding"])
