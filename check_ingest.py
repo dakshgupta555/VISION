@@ -19,6 +19,12 @@ Checks per case
              ambient removed, thermal diagnosis must say "unavailable" and
              the overload must still be caught
   rows       kept-row count is what the mangle implies
+  extra      case-specific: sheet chosen and why, rating source, decoys
+             excluded by rule, conflicts warned, missing markers never zero
+
+The last two cases are the blind files (tests/fixtures/blind/), kept as
+permanent regressions: an Excel workbook with the nameplate on its first
+sheet, and its cp1252 CSV export.
 """
 
 import sys
@@ -240,9 +246,137 @@ def m_everything():
         RENAME, 2880, 1.5
 
 
+# ---- Excel and the failure classes the blind test exposed -----------------
+def _xlsx(name, sheets):
+    """sheets: {sheet name: DataFrame or list of rows}, written in order."""
+    import openpyxl
+    p = TMP / f"{name}.xlsx"
+    wb = openpyxl.Workbook()
+    wb.remove(wb.active)
+    for title, data in sheets.items():
+        ws = wb.create_sheet(title)
+        if isinstance(data, pd.DataFrame):
+            ws.append(list(data.columns))
+            for row in data.itertuples(index=False):
+                ws.append([None if (isinstance(v, float) and v != v) else v for v in row])
+        else:
+            for row in data:
+                ws.append(row)
+    wb.save(p)
+    return p
+
+
+def m_excel():
+    d = BASE.copy()
+    d["timestamp"] = pd.to_datetime(d.timestamp)
+    return _xlsx("excel_plain", {"Sheet1": d}), IDENT, 2880, 1
+
+
+def m_excel_native_split():
+    d = BASE.copy()
+    t = pd.to_datetime(d.pop("timestamp"))
+    d.insert(0, "Time", [x.time() for x in t])
+    d.insert(0, "Date", [x.date() for x in t])
+    info = [["Transformer nameplate"], ["Transformer ID", "DT-001"], ["Rating (kVA)", 100],
+            ["HV / LV", "11/0.433 kV"], ["Cooling", "ONAN"]]
+    def extra(rep, df):
+        ok = rep.sheet == "Data" and rep.nameplate["how"].startswith("read from sheet 'Nameplate'") \
+            and rep.timestamp["how"].startswith("Excel date cells")
+        return ok, f"sheet {rep.sheet!r}, rating {rep.nameplate['how']}, time {rep.timestamp['how']}"
+    return _xlsx("excel_native_date_time", {"Nameplate": info, "Data": d}), IDENT, 2880, 1, extra
+
+
+def m_excel_many_sheets():
+    d = BASE.copy()
+    d["timestamp"] = pd.to_datetime(d.timestamp)
+    readme = [["README"], ["This workbook has training and test data."], ["Columns: see header."]]
+    p = _xlsx("excel_readme_train_test", {"README": readme, "training": d.iloc[:2000], "test": d.iloc[2000:]})
+    def extra(rep, df):
+        warned = any("data-like sheets" in w for w in rep.warnings)
+        _, rep2 = load(p, {"sheet": "test"})
+        ok = warned and rep.sheet == "training" and rep2.sheet == "test" and rep2.rows["kept"] == 880
+        return ok, f"chose {rep.sheet!r}, warned {warned}; --sheet test -> {rep2.sheet!r} {rep2.rows['kept']} rows"
+    # a slice of the record: tests sheet choice, not diagnosis (no detectable fault in it)
+    return p, IDENT, 2000, 1, extra, False
+
+
+def m_missing_markers():
+    d = BASE.copy()
+    cols = ["IR", "IY", "IB", "VR", "VY", "VB", "oil_temp", "ambient_temp"]
+    marks = ["--", "-", "ERR", "NA", "#N/A", "NaN"]
+    hit = RNG.random((len(d), len(cols))) < 0.03
+    d[cols] = d[cols].astype(object)
+    for j, c in enumerate(cols):
+        idx = np.where(hit[:, j])[0]
+        d.loc[d.index[idx], c] = [marks[k % len(marks)] for k in range(len(idx))]
+    n_marks = int(hit.sum())
+    def extra(rep, df):
+        counted = sum(rep.missing_markers.values())
+        zeros = int((df[cols] == 0).sum().sum())
+        return counted == n_marks and zeros == 0, f"{counted} of {n_marks} markers read as missing, {zeros} zeros"
+    return write("missing_markers", d), IDENT, 2880, 1.5, extra
+
+
+def m_decoys_first():
+    d = BASE.copy()
+    n = len(d)
+    decoys = {"kVA": RNG.uniform(10, 90, n), "IN (A)": RNG.uniform(0, 9, n), "WTI (°C)": d.oil_temp + 8,
+              "PF": 0.9, "Freq (Hz)": 50.0, "kVAr": RNG.uniform(1, 9, n), "HV_Current_R": RNG.uniform(1, 5, n),
+              "HV Voltage (kV)": 11.0, "Status": "OK", "Battery_V": 12.1}
+    front = pd.DataFrame(decoys)
+    out = pd.concat([d[["timestamp"]], front, d.drop(columns="timestamp")], axis=1)
+    def extra(rep, df):
+        ok = set(decoys) <= set(rep.decoys) and not rep.conflicts
+        return ok, f"{len(set(decoys) & set(rep.decoys))}/{len(decoys)} decoys excluded, conflicts {len(rep.conflicts)}"
+    return write("decoys_before_real", out), IDENT, 2880, 1, extra
+
+
+def m_competing():
+    d = BASE.copy()
+    d.insert(2, "I_R", d.IR)                      # the same channel exported twice
+    def extra(rep, df):
+        ok = any("IR" in c for c in rep.conflicts)
+        return ok, rep.conflicts[0][:80] if rep.conflicts else "no conflict reported"
+    return write("competing_columns", d), {**IDENT, "IR": "I_R"}, 2880, 1, extra
+
+
+def m_cp1252_title_rows():
+    d = BASE.rename(columns={"oil_temp": "Oil Temp (°C)", "ambient_temp": "Ambient (°C)"})
+    pad = "," * (d.shape[1] - 1)
+    pre = f"Distribution Transformer Monitoring Log{pad}\nAsset: DT-001   Feeder: F-07{pad}\nExport interval: 15 min{pad}\n{pad}\n"
+    p = TMP / "cp1252_title_rows.csv"
+    p.write_bytes((pre + d.to_csv(index=False)).encode("cp1252"))
+    return p, {**IDENT, "oil_temp": "Oil Temp (°C)", "ambient_temp": "Ambient (°C)"}, 2880, 1
+
+
+BLIND = Path("tests/fixtures/blind")
+BLIND_MAP = {"IR": "IR (A)", "IY": "IY (A)", "IB": "IB (A)", "VR": "VR (V)", "VY": "VY (V)", "VB": "VB (V)",
+             "oil_temp": "OTI (°C)", "ambient_temp": "Amb. Temp (°C)"}
+BLIND_DECOYS = {"kVA", "IN (A)", "WTI (°C)", "PF", "Freq (Hz)", "Status"}
+
+
+def _blind_extra(want_rating_how):
+    def extra(rep, df):
+        ok = BLIND_DECOYS <= set(rep.decoys) and rep.cadence.get("gaps") == 1 \
+            and sum(rep.missing_markers.values()) > 0 and rep.nameplate["how"].startswith(want_rating_how)
+        return ok, (f"decoys {len(BLIND_DECOYS & set(rep.decoys))}/6, outage {rep.cadence.get('gap_hours')} h, "
+                    f"markers {sum(rep.missing_markers.values())}, rating {rep.nameplate['rating_kva']:g} ({rep.nameplate['how']})")
+    return extra
+
+
+def m_blind_xlsx():
+    return BLIND / "TF-JPR-0417_log.xlsx", BLIND_MAP, 2856, 1.5, _blind_extra("read from sheet 'Info'")
+
+
+def m_blind_csv():
+    return BLIND / "TF-JPR-0417_log.csv", BLIND_MAP, 2856, 1.5, _blind_extra("NOT FOUND")
+
+
 CASES = [m_rename, m_units_magnitude, m_units_named, m_shuffle, m_holes, m_hourly, m_drop_ambient,
          m_duplicates, m_ddmm, m_mmdd, m_junk, m_generic, m_semicolon, m_semicolon_comma, m_preamble,
-         m_epoch, m_split_datetime, m_l123, m_line_line, m_jitter, m_blank_rows, m_everything]
+         m_epoch, m_split_datetime, m_l123, m_line_line, m_jitter, m_blank_rows, m_everything,
+         m_excel, m_excel_native_split, m_excel_many_sheets, m_missing_markers, m_decoys_first,
+         m_competing, m_cp1252_title_rows, m_blind_xlsx, m_blind_csv]
 
 
 # --------------------------------------------------------------------------- #
@@ -272,7 +406,10 @@ def main():
         name = fn.__name__[2:]
         row = {"case": name}
         try:
-            path, expect, rows_expected, scale = fn()
+            spec = fn()
+            path, expect, rows_expected, scale = spec[:4]
+            extra = spec[4] if len(spec) > 4 else None
+            diagnose = spec[5] if len(spec) > 5 else True
         except Exception as e:                                   # the mangle itself failed
             results.append({**row, "load": f"MANGLE ERROR {e}"})
             continue
@@ -314,8 +451,16 @@ def main():
                 bad_val.append(f"{k} err {err:.3g}")
         row["values"] = "ok" if not bad_val and len(common) else ("FAIL " + "; ".join(bad_val) if bad_val
                                                                    else "FAIL no shared timestamps")
-        ok, note = diagnosis(df, rep)
-        row["diagnosis"] = ("ok: " if ok else "FAIL: ") + note
+        if diagnose:
+            ok, note = diagnosis(df, rep)
+            row["diagnosis"] = ("ok: " if ok else "FAIL: ") + note
+        else:
+            row["diagnosis"] = "ok: n/a (partial record)"
+        if extra:
+            ok_x, note_x = extra(rep, df)
+            row["extra"] = ("ok: " if ok_x else "FAIL: ") + note_x
+        else:
+            row["extra"] = "ok"
         kept = rep.rows["kept"]
         row["rows"] = "ok" if abs(kept - rows_expected) <= max(2, 0.01 * rows_expected) else \
             f"FAIL kept {kept}, want {rows_expected}"
@@ -331,7 +476,7 @@ def main():
     pd.set_option("display.width", 250)
     pd.set_option("display.max_colwidth", 70)
     print(out.to_string(index=False))
-    checks = ["load", "mapping", "values", "diagnosis", "rows"]
+    checks = ["load", "mapping", "values", "diagnosis", "rows", "extra"]
     passed = out.apply(lambda r: all(str(r[c]).startswith("ok") for c in checks), axis=1)
     print(f"\n  {int(passed.sum())} / {len(out)} cases pass every check   (files in {TMP})")
     return 0 if passed.all() else 1

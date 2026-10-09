@@ -52,9 +52,12 @@ analytics; the real file replaces it.
 
 ### Ingestion — `dtwin/ingest.py`
 
-Nine stages, each reported: decoding; separator and decimal-comma sniffing;
-header detection with preamble skipping (and a kVA rating and tag read from
-it); column identification by name tokens, then fuzzy matching, then content
+Nine stages, each reported: reading (CSV text with BOM/NUL-gated UTF-16,
+else UTF-8, else cp1252; or an Excel workbook with every sheet scored and the
+data sheet chosen, reported and overridable); separator and decimal-comma
+sniffing; header detection over filled cells, so padded title rows are
+skipped, with nameplate facts read from the preamble and from other sheets;
+decoy exclusion by rule; column identification by name tokens, then fuzzy matching, then content
 for generic headers; unit inference; timestamp parsing (text day- or
 month-first, epoch, Excel serial, split date and time); row hygiene (blank,
 unparseable, duplicate, out of order); cadence regularisation; short-hole

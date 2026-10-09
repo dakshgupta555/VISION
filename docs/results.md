@@ -46,7 +46,26 @@ asset fault.
 
 ## Ingestion — `python check_ingest.py`
 
-**22 of 22** mangled variants of `showcase.csv` load, map every channel to the
+**Blind test.** A teammate built a file we had never seen: an Excel workbook
+with the nameplate on one sheet and readings on another, three title rows, a
+cp1252 CSV export, decoy columns (kVA, IN, WTI, PF, Freq, Status), Excel-native
+date and time cells, three concatenated newest-first exports with repeated
+headers, a 6 h outage, and "--" / "ERR" missing markers. **The ingestion layer
+that passed 22 of 22 in-sample mangles crashed on both files** — no Excel
+support, and a decoder that tried UTF-16 before cp1252. Behind those it would
+also have taken a padded title row as the header and only avoided mapping three
+decoys by luck of column order. All fixed; both files are now permanent
+regression cases (`tests/fixtures/blind/`). This is the in-sample caveat
+measured: our own mangles missed every one of these failure modes.
+
+**31 of 31** cases now pass: the 22 mangles below, both blind files, and seven
+cases for the failure classes the blind test exposed (plain workbook, native
+date and time cells with the nameplate on another sheet, a README / training /
+test workbook that must warn and honour `--sheet`, every missing marker read
+as missing and never zero, decoys placed before the real columns, two columns
+competing for one channel, cp1252 with comma-padded title rows).
+
+The original **22 of 22** mangled variants of `showcase.csv` load, map every channel to the
 right source column, match the clean values after unit conversion, and still
 catch the cooling fault and call the probe drift a sensor fault (or, with
 ambient removed, report the thermal diagnosis unavailable and still catch the
@@ -59,9 +78,9 @@ semicolon · semicolon with decimal comma · metadata preamble · epoch seconds 
 split date and time · L1/L2/L3 and U1/U2/U3 naming · line-to-line voltages ·
 jittered timestamps · blank rows and a trailer · all of these at once.
 
-These mangles were written by the same people who wrote the ingestion layer,
-against the same schema. Blind mangles from someone else are the closer
-analogue to an unseen file.
+The 22 were written by the same people who wrote the ingestion layer, against
+the same schema; the blind test above is what that is worth. More blind files
+from someone else remain the best check before an unseen dataset.
 
 ## Notifications — `python check_notify.py`
 

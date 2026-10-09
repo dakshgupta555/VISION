@@ -293,6 +293,10 @@ def build_story(tw, t=None):
     # ---- appendix: mapping report ------------------------------------------
     E.append(PageBreak())
     E.append(Paragraph("Appendix - ingestion mapping report", H2))
+    if rep.sheets:
+        E.append(Paragraph(_e(f"Workbook sheets: " + ", ".join(f"{x['name']} ({x['numeric_rows']} numeric rows)"
+                                                             for x in rep.sheets)
+                              + f". Data read from '{rep.sheet}': {rep.sheet_reason}."), BODY))
     E.append(Paragraph(_e(f"Source {Path(rep.source).name}. Separator '{rep.separator}', decimal '{rep.decimal}', "
                           f"encoding {rep.encoding}, header on line {rep.header_row + 1}"
                           + (f", {len(rep.preamble)} preamble lines skipped" if rep.preamble else "")
@@ -319,6 +323,10 @@ def build_story(tw, t=None):
                  + (f"; {rep.cadence['gaps']} gaps over 3 samples ({rep.cadence['gap_hours']} h)"
                     if rep.cadence.get("gaps") else "") + ".",
                  f"Short holes interpolated (<= 2 samples): {filled}.",
+                 f"Columns excluded by rule: "
+                 + ("; ".join(f"{c} ({w})" for c, w in rep.decoys.items()) or "none") + ".",
+                 f"Missing markers ('--', 'ERR', 'NA' ...) read as missing: "
+                 + (", ".join(f"{k} {v}" for k, v in rep.missing_markers.items() if v) or "none") + ".",
                  f"Columns ignored: {', '.join(map(str, rep.ignored_columns)) or 'none'}."):
         E.append(Paragraph(_e(line), BODY))
     for wn in rep.warnings:

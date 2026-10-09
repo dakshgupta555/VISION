@@ -93,7 +93,8 @@ class Twin:
         the request, else the file's sidecar or preamble, else an assumption
         that the report flags."""
         df, rep = ingest.load(DATA / f"{name}.csv", rating_kva=rating_kva)
-        np_ = preset(rep.nameplate["rating_kva"])
+        extra = {k: rep.nameplate[k] for k in ("hv_kv", "lv_v") if rep.nameplate.get(k)}
+        np_ = preset(rep.nameplate["rating_kva"], **extra)
         if rep.nameplate.get("tag"):
             np_.tag = rep.nameplate["tag"]
         rows, fits, meta = validate(df, np_, absent=rep.absent)

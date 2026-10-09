@@ -55,6 +55,16 @@ takes a few milliseconds.
 3. Restart the backend and pick `<name>` in the dashboard. If the report shows
    warnings, they also appear in an amber banner under the header.
 
+Excel workbooks (`.xlsx`, `.xlsm`) load directly. Every sheet is listed and
+scored (numeric rows x recognised column names); the best is used and the
+report says which and why. If several sheets look like data (a README /
+training / test workbook, say) it warns: pick one with `--sheet NAME`.
+Nameplate facts (rating, voltages, tag) are read from any sheet or from the
+lines above the header. Columns that look like channels but are not — kVA, kW,
+kVAr, PF, frequency, neutral current, winding temperature, HV-side quantities,
+status text, logger supply — are excluded by rule and listed. Cells such as
+`--`, `-`, `ERR`, `NA`, `#N/A`, `NaN` are read as missing, never as zero.
+
 ## Correct a wrong guess
 
 Every decision can be overridden. On the command line:
@@ -64,6 +74,7 @@ Every decision can be overridden. On the command line:
         --unit IR=mA --unit VR=kV_LL \
         --dayfirst yes \
         --kva 63 \
+        --sheet Readings \
         --save-sidecar
 
 `--save-sidecar` writes `data/<name>.mapping.json`, which the dashboard and the
@@ -78,8 +89,9 @@ PDF also read:
 
 Channels: `IR IY IB VR VY VB oil_temp ambient_temp timestamp`.
 Units: currents `A mA kA`; voltages `V kV V_LL kV_LL` (line-to-line is divided
-by sqrt 3); temperatures `C K F`. Also accepted in the sidecar: `separator`,
-`decimal`, `assumed_ambient_c`.
+by sqrt 3); temperatures `C K F`. Also accepted in the sidecar: `sheet`,
+`separator`, `decimal`, `assumed_ambient_c`. If two columns compete for one
+channel the report prints a CONFLICT line naming both; fix it with `--map`.
 
 If a channel is missing from the file, the report says **ABSENT** and the
 dashboard banner says which diagnoses are off. Without ambient, the cooling and
