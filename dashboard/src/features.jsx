@@ -299,14 +299,41 @@ const TIER_TONE = { P1: "text-alarm border-alarm", P2: "text-warn border-warn", 
 export function Notifications({ scenario, kva, i }) {
   const [d, setD] = useState(null);
   const [open, setOpen] = useState(null);
+  const [demo, setDemo] = useState(null);
+  const [armed, setArmed] = useState(null);       // two-step: arm, then confirm
+  const [busy, setBusy] = useState(null);
+  const [result, setResult] = useState(null);
+  const [tick, setTick] = useState(0);
   useEffect(() => {
     api(`${scenario}/notifications?t=${i}${kva ? `&kva=${kva}` : ""}`).then(setD).catch(() => {});
-  }, [scenario, kva, i]);
+  }, [scenario, kva, i, tick]);
+  useEffect(() => { api("demo/status").then(setDemo).catch(() => {}); }, [tick]);
+  useEffect(() => { if (!armed) return; const t = setTimeout(() => setArmed(null), 5000); return () => clearTimeout(t); }, [armed]);
+
+  const sendReal = (m) => {
+    if (armed !== m.id) { setArmed(m.id); return; }
+    setArmed(null); setBusy(m.id); setResult(null);
+    fetch(`/api/${scenario}/demo-send/${encodeURIComponent(m.id)}${kva ? `?kva=${kva}` : ""}`, { method: "POST" })
+      .then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.detail || r.status); return j; })
+      .then((j) => setResult({ ok: true, text: j.sent.map((x) => `${x.to} (${x.as})`).join(", ") }))
+      .catch((e) => setResult({ ok: false, text: String(e.message || e) }))
+      .finally(() => { setBusy(null); setTick((x) => x + 1); });
+  };
   if (!d) return <Panel title="Notifications sent">loading…</Panel>;
   const shown = d.entries;
   return (
     <Panel title="Notifications sent" className="overflow-auto max-h-[420px]"
       right={<span className="text-[10px] text-warn">{d.mode === "replay" ? "REPLAY · outbox only, no real email/SMS" : "LIVE"}</span>}>
+      <div className={`text-[11px] mb-2 border rounded px-2 py-1 ${demo?.enabled ? "border-accent text-accent" : "border-edge text-dim"}`}>
+        {demo?.enabled
+          ? <>Demo sends ON · {demo.sends_left} left · real email to {demo.recipients.join(", ")} · click "Send for real" on any row (asks to confirm)</>
+          : <>Demo sends off: {demo?.reason || "checking…"}</>}
+      </div>
+      {result && (
+        <div className={`text-xs mb-2 ${result.ok ? "text-ok" : "text-alarm"}`}>
+          {result.ok ? `Sent for real to ${result.text}. Check the inbox (and Spam).` : `Not sent: ${result.text}`}
+        </div>
+      )}
       <div className="text-[11px] text-dim mb-2">
         {shown.length} shown up to the cursor · {d.total_planned} planned for the whole record from {d.episodes} alert episodes ·
         SMTP {d.smtp_configured ? "configured" : "not configured"} · outbox <span className="num">{d.outbox.split("/").slice(-2).join("/")}</span>
@@ -326,6 +353,14 @@ export function Notifications({ scenario, kva, i }) {
                   ? <a className="text-accent ml-2" onClick={(e) => e.stopPropagation()}
                       href={`/api/${scenario}/outbox/${m.attachment.split("/").pop()}${kva ? `?kva=${kva}` : ""}`}>PDF</a>
                   : <span className="text-dim ml-2">PDF {m.meta.attachment_status}</span>)}
+                {demo?.enabled && (
+                  m.meta.demo_sent
+                    ? <span className="text-ok ml-2 text-[11px]">✓ sent for real to {m.meta.demo_sent.to}</span>
+                    : <button className={`ml-2 text-[11px] border rounded px-1.5 ${armed === m.id ? "border-alarm text-alarm" : "border-accent text-accent"}`}
+                        disabled={busy !== null} onClick={(e) => { e.stopPropagation(); sendReal(m); }}>
+                        {busy === m.id ? "sending…" : armed === m.id ? "confirm: send real email" : "Send for real"}
+                      </button>
+                )}
                 {open === m.id && (
                   <pre className="whitespace-pre-wrap text-[11px] text-fg/80 bg-ink border border-edge rounded p-2 mt-1">
 {`Subject: ${m.subject}\n\n${m.body}\n\nSMS: ${m.sms}\n${m.note}`}

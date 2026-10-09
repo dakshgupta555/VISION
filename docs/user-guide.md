@@ -123,6 +123,29 @@ If SMTP or the SMS gateway is not configured, messages stay in the outbox and
 say so. Live mode also refuses events older than 30 minutes, so it cannot
 replay history to real recipients.
 
+## Demo: send an alert for real
+
+For showing a judge an alarm arriving on a phone.
+
+1. `cp .env.example .env` and fill in the SMTP settings (for Gmail an App
+   Password) and `DTWIN_NOTIFY_LIVE=1`. `.env` is gitignored; the backend reads
+   it at startup.
+2. Set who receives demo mail in `config/escalation.json` under `demo`
+   (`recipients` by role, `max_sends` per backend session).
+3. Restart the backend. The Notifications panel shows **Demo sends ON** with the
+   addresses and sends left; otherwise it says what is missing.
+4. Scrub to an event (cooling alarm: 22 Apr 04:00), click **Send for real** on
+   its row, then **confirm**. Every recipient row of that event is sent: a P1
+   reaches the site engineer and the maintenance head together.
+
+Each demo email is tagged `[DEMO - replay of <time>]` and carries the alert, why,
+what to do, the readings at that moment, the time-to-trip projection, the health
+breakdown, a summary of every fault to date, the SMS frame, and the PDF report.
+It goes only to the demo addresses. Scrubbing and Play still never send.
+
+Before the event: test on the venue network (outbound port 587 is sometimes
+blocked; a phone hotspot works), and keep a screen recording as a fallback.
+
 ## Reports from the command line
 
     python -m dtwin.report <name>                         # as of the last sample

@@ -211,6 +211,38 @@ def main():
           all(pd.Timestamp(m["time"]) <= cur for m in feed) and len(again) == 0,
           f"{len(feed)} entries up to {cur:%d %b %H:%M}, {len(again)} new on re-process")
 
+    # ---- 9 demo button ---------------------------------------------------------
+    from dtwin.notify import demo as DM
+    off = DM.status(cfg, env={})
+    check("demo: disabled without DTWIN_NOTIFY_LIVE=1, says why", not off["enabled"] and "DTWIN_NOTIFY_LIVE" in off["reason"],
+          off["reason"])
+    got["smtp"].clear()
+    smtplib.SMTP = FakeSMTP
+    try:
+        env = {**SMTP_ENV, "DTWIN_NOTIFY_LIVE": "1"}
+        d = D.Dispatcher(tw, mode="replay", outbox=tmp / "demo")
+        cool = next(e for e in d.events if e.tier == "P1" and e.type == "OPEN" and "Cooling" in e.reason)
+        d.process(cool.time)
+        DM._SENT.clear()
+        sent = DM.send_event(d, cool.id, env=env)
+        to = sorted(em["To"] for em in got["smtp"])
+        regular = {r.get("email") for r in cfg["recipients"].values()}
+        demo_addr = {r["email"] for r in cfg["demo"]["recipients"].values()}
+        pdf_ok = all(any(p.get_content_type() == "application/pdf" for p in em.iter_attachments()) for em in got["smtp"])
+        tagged = all(em["Subject"].startswith("[DEMO - replay of") for em in got["smtp"])
+        check("demo: one click sends the whole P1 event to the demo addresses only",
+              len(sent) == 2 and set(to) <= demo_addr and not set(to) & regular and pdf_ok and tagged,
+              f"to {to}, PDF attached {pdf_ok}, [DEMO] tagged {tagged}")
+        DM._SENT.extend([{}] * (cfg["demo"]["max_sends"] - len(DM._SENT)))
+        try:
+            DM.send_event(d, cool.id, env=env)
+            check("demo: cap of max_sends per session", False)
+        except PermissionError as e:
+            check("demo: cap of max_sends per session", True, str(e))
+        DM._SENT.clear()
+    finally:
+        smtplib.SMTP = saved[0]
+
     D._PDF_POOL.submit(lambda: None).result()
     n_ok = sum(ok for _, ok, _ in RESULTS)
     print(f"\n  {n_ok} / {len(RESULTS)} checks pass   (outboxes in {tmp})")

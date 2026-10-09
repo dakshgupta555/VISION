@@ -127,14 +127,21 @@ class SmtpNotifier(Notifier):
         if msg.attachment and Path(msg.attachment).exists():
             em.add_attachment(Path(msg.attachment).read_bytes(), maintype="application",
                               subtype="pdf", filename=Path(msg.attachment).name)
+        self.deliver(em)
+        msg.delivered_via = "smtp"
+        return msg
+
+    def deliver(self, em: EmailMessage):
+        """Hand a finished email to the server. Called by _send, and by the
+        demo sender for its explicit, human-triggered sends (dtwin/notify/demo.py)."""
+        if not em.get("From"):
+            em["From"] = self.sender
         with smtplib.SMTP(self.host, self.port, timeout=20) as s:
             if self.tls:
                 s.starttls()
             if self.user:
                 s.login(self.user, self.password)
             s.send_message(em)
-        msg.delivered_via = "smtp"
-        return msg
 
 
 class GprsNotifier(Notifier):

@@ -11,6 +11,7 @@ Truth files are never read here.
 
 from typing import Optional, Union
 
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Response
@@ -19,6 +20,22 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .engine import get_twin, scenarios, selftest
 from ..physics.nameplate import IS_1180_RATINGS
+
+def _load_dotenv(path=Path(__file__).resolve().parents[2] / ".env"):
+    """Read KEY=VALUE lines from the repo's .env (gitignored) into the
+    environment, without overriding anything already set."""
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        k, v = k.strip().removeprefix("export ").strip(), v.strip().strip("'").strip('"')
+        os.environ.setdefault(k, v)
+
+
+_load_dotenv()
 
 app = FastAPI(title="Distribution Transformer Digital Twin", version="0.3")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -120,6 +137,30 @@ def outbox_file(name: str, file: str, kva: Optional[float] = None):
     if not p.exists():
         raise HTTPException(404, "attachment not rendered yet")
     return FileResponse(p, media_type="application/pdf", filename=p.name)
+
+
+@app.get("/api/demo/status")
+def demo_status():
+    from ..notify import demo
+    from ..notify.policy import load_config
+    return demo.status(load_config())
+
+
+@app.post("/api/{name}/demo-send/{msg_id:path}")
+def demo_send(name: str, msg_id: str, kva: Optional[float] = None):
+    """Explicit, human-triggered: send one replayed event for real to the demo
+    recipients. The automatic replay path never reaches this."""
+    from ..notify import demo
+    d = _dispatcher(name, kva)
+    try:
+        sent = demo.send_event(d, msg_id)
+    except PermissionError as e:
+        raise HTTPException(403, str(e))
+    except KeyError as e:
+        raise HTTPException(404, str(e))
+    except Exception as e:
+        raise HTTPException(502, f"SMTP send failed: {e}")
+    return {"sent": sent, **demo.status(d.cfg)}
 
 
 @app.get("/api/{name}/alerts")

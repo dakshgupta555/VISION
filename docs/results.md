@@ -65,7 +65,9 @@ analogue to an unseen file.
 
 ## Notifications — `python check_notify.py`
 
-**11 of 11.** A fault re-firing 10 times inside the hold-off sends one OPEN, one
+**14 of 14** (11 below plus three for the demo button: disabled without the
+live flag; one click sends the whole P1 event to the demo addresses only,
+tagged and with the PDF; the per-session cap holds). A fault re-firing 10 times inside the hold-off sends one OPEN, one
 ESCALATE and one CLEAR per recipient. On showcase, 14 alert episodes become 10
 incidents and 33 alert notices, plus a daily digest. With SMTP credentials set,
 `DTWIN_NOTIFY_LIVE=1` set and every network call rigged to raise, a full replay
