@@ -259,10 +259,10 @@ def main():
     raw = yaml.safe_load(open(FLEET_YAML))
     msgs = []
     for mutate, must in (
-            (lambda c: c["assets"][20].pop("xy_km"), [raw["assets"][20]["id"], "xy_km"]),
+            (lambda c: c["assets"][20].pop("lat"), [raw["assets"][20]["id"], "lat"]),
             (lambda c: (c["assets"][3].pop("node_cost_inr"), c["costs"].pop("node_cost_inr")), [raw["assets"][3]["id"], "node_cost_inr"]),
-            (lambda c: (c["gateways"][5].pop("cost_inr"), c["costs"].pop("gateway_cost_inr")), [raw["gateways"][5]["id"], "cost_inr"]),
-            (lambda c: c["assets"][0].__setitem__("xy_km", ["a", 1]), [raw["assets"][0]["id"], "xy_km"])):
+            (lambda c: (c["gateways"][5].pop("install_cost_inr"), c["costs"].pop("gateway_cost_inr")), [raw["gateways"][5]["id"], "install_cost_inr"]),
+            (lambda c: c["assets"][0].__setitem__("lon", "east"), [raw["assets"][0]["id"], "lon"])):
         c = copy.deepcopy(raw)
         mutate(c)
         try:

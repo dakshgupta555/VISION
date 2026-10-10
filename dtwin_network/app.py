@@ -246,6 +246,74 @@ def plan(budget: float = None, node_scale: float = 1.0, gw_scale: float = 1.0, r
             "disclaimer": FLEET.district.get("disclaimer")}
 
 
+@app.get("/api/net/geo")
+def geo_view():
+    """Positions, the distance matrix (metres) and the labels every synthetic
+    thing must carry on screen."""
+    need()
+    m = planner.Model(FLEET)
+    return {"fleet": FLEET.to_json(), "distance_m": {a: {g: round(v) for g, v in row.items()} for a, row in m.d.items()},
+            "labels": {"positions": FLEET.district.get("positions_label"),
+                       "coverage": FLEET.radio.get("coverage_label"),
+                       "costs": FLEET.costs.get("label", "Illustrative costs"),
+                       "link_budget": "estimate: " + str(FLEET.link_budget.get("model", "")),
+                       "measured": "simulated packets, not a measurement"},
+            "area": FLEET.district.get("area"), "origin_latlon": FLEET.district.get("origin_latlon"),
+            "link_budget": FLEET.link_budget, "budget_inr": FLEET.planning.get("budget_inr", 400000)}
+
+
+def _clean_overrides(ov):
+    out = {}
+    for gid, o in (ov or {}).items():
+        if gid not in FLEET.gateways:
+            raise HTTPException(422, f"unknown gateway {gid!r} in overrides")
+        o = o or {}
+        r = {}
+        if o.get("radius_m") is not None:
+            v = float(o["radius_m"])
+            if not 100 <= v <= 20000:
+                raise HTTPException(422, f"{gid}: radius_m must be between 100 and 20000")
+            r["radius_m"] = v
+        if o.get("cost_inr") is not None:
+            v = float(o["cost_inr"])
+            if not 0 <= v <= 1e8:
+                raise HTTPException(422, f"{gid}: cost_inr must be between 0 and 10 crore")
+            r["cost_inr"] = v
+        if r:
+            out[gid] = r
+    return out
+
+
+@app.post("/api/net/plan")
+async def plan_post(request: Request):
+    """The map's planner: budget, per-gateway radius/cost overrides and the
+    link-budget switch. Returns optimised, greedy and current plans, coverage
+    and every transformer x gateway pair with its separate fields."""
+    need()
+    b = await _body(request)
+    B = _budget(b.get("budget"))
+    ov = _clean_overrides(b.get("overrides"))
+    lbon = b.get("link_budget")
+    t0 = time.perf_counter()
+    try:
+        m = planner.Model(FLEET, overrides=ov, link_budget=lbon)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    risks = riskmod.static_risks(FLEET)
+    opt = planner.solve(FLEET, B, risks=risks, model=m)
+    gr = planner.greedy(FLEET, B, risks=risks, model=m)
+    cur = planner.current(FLEET, risks=risks, model=m)
+    show = opt if opt["feasible"] else cur
+    load = {g["id"]: g["used"] for g in show["gateway_load"]}
+    room = {g.id: (load.get(g.id, 0) < m.cap[g.id]) for g in m.G}
+    pairs = {a.id: m.pairs_for(a.id, room) for a in m.T}
+    ms = round(1000 * (time.perf_counter() - t0), 1)
+    return {"budget": B, "optimised": opt, "greedy": gr, "current": cur,
+            "why": planner.compare(opt, gr) if opt["feasible"] else opt["message"],
+            "pairs": pairs, "radius_m": m.radius, "cost_inr": m.install_cost, "max_nodes": m.cap,
+            "link_budget": m.use_lb, "solve_ms": ms, "risks": risks}
+
+
 @app.get("/api/net/sensitivity")
 def sensitivity(budget: float = None):
     need()
