@@ -9,6 +9,7 @@ import NetworkTab from "./NetworkTab.jsx";
 import AssetPage from "./AssetPage.jsx";
 import Planner from "./Planner.jsx";
 import Strategy from "./Strategy.jsx";
+import MapView from "./MapView.jsx";
 
 const SINGLE_TWIN = "http://localhost:5173";
 const FAULTS = [
@@ -105,7 +106,7 @@ function TopBar({ ov, fleet, tab, setTab, mode, setMode, theme, setTheme }) {
         <div className="text-sm text-dim">GridTwin network: {fleet.assets.filter((a) => a.monitored).length} of {fleet.assets.length} transformers monitored, LoRaWAN</div>
       </div>
       <nav className="flex gap-1" aria-label="Pages">
-        {[["network", "Network twin"], ["planner", "Deployment planner"], ["strategy", "Strategy comparison"]].map(([k, label]) => (
+        {[["network", "Network twin"], ["map", "Map"], ["planner", "Deployment planner"], ["strategy", "Strategy comparison"]].map(([k, label]) => (
           <button key={k} onClick={() => setTab(k)} aria-current={tab === k ? "page" : undefined}
             className={`px-3 py-1.5 rounded-lg text-[15px] ${tab === k ? "bg-ink text-fg font-semibold" : "text-dim hover:text-fg"}`}>{label}</button>
         ))}
@@ -239,6 +240,7 @@ export default function App() {
   const [hist, setHist] = useState(null);
   const [k, setK] = useState(null);
   const [budget, setBudget] = useState(400000);
+  const [demoOv, setDemoOv] = useState(null);       // the map's demo state, while a demo runs
   const inflight = useRef(0);
 
   useEffect(() => { api("net/fleet").then(setFleet).catch((e) => setErr(String(e))); }, []);
@@ -266,7 +268,7 @@ export default function App() {
   const openAsset = (id) => { setAsset(id); window.scrollTo(0, 0); };
   return (
     <div className="min-h-screen">
-      <TopBar ov={view} fleet={fleet} tab={tab} setTab={(t) => { setTab(t); setAsset(null); }} mode={mode} setMode={setMode} theme={theme} setTheme={setTheme} />
+      <TopBar ov={tab === "map" && demoOv ? demoOv : view} fleet={fleet} tab={tab} setTab={(t) => { setTab(t); setAsset(null); setDemoOv(null); }} mode={mode} setMode={setMode} theme={theme} setTheme={setTheme} />
       <div className="px-6 py-1.5 bg-panel border-b border-edge text-sm text-dim">{DISCLAIMER}</div>
       {tab === "network" && (mode === "live" ? <LiveBar ov={ov} refresh={refresh} /> : <ReplayBar hist={hist} k={k} setK={setK} />)}
       {err && <div role="alert" className="px-6 py-2 bg-panel border-b-2 border-alarm text-alarm font-semibold">Backend unreachable: {err}. Showing the last state received.</div>}
@@ -275,6 +277,7 @@ export default function App() {
         : <NetworkTab fleet={fleet} ov={view} onAsset={openAsset} replay={Boolean(ov.replay)} />)}
       {tab === "planner" && <Planner fleet={fleet} budget={budget} setBudget={setBudget} />}
       {tab === "strategy" && <Strategy budget={budget} setBudget={setBudget} />}
+      {tab === "map" && <MapView live={view} theme={theme} onDemo={setDemoOv} onOpenAsset={(id) => { setTab("network"); openAsset(id); }} />}
     </div>
   );
 }

@@ -31,13 +31,16 @@ currents, three phase voltages, top-oil and ambient temperature. Nothing else.
 
 ## Network dashboard (separate app, `docs/network.md`)
 
-A district of transformers on a simulated LoRaWAN network, plus a deployment
-planner. Illustrative data only; it does not change the app above.
+A district of transformers on a simulated LoRaWAN network, a geospatial Map
+(OpenStreetMap, with an offline grid fallback) and a gateway placement
+optimiser. Synthetic layout near Hoskote, Bengaluru Rural; estimated proximity
+coverage; illustrative costs. It does not change the app above.
 
     uvicorn dtwin_network.app:app --port 8001                # network backend
-    cd network-dashboard && npm install && npx vite          # http://localhost:5180
+    cd network-dashboard && npm install && npx vite          # http://localhost:5180 -> Map tab
     python -m dtwin_network.sim                              # fleet simulator, posts to :8001
-    python check_network.py                                  # 26 checks (needs :8000 and :5173 for the last)
+    python -m dtwin_network.demo                             # the seeded six-step demo, headless (also a Demo button on the Map tab)
+    python check_network.py                                  # 42 checks (UI ones need :8000/:5173 and :5180/:8001)
 
 ## Key equations (full set in `docs/methodology.md`)
 

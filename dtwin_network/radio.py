@@ -33,6 +33,8 @@ import numpy as np
 from dtwin.live.sim import CHANNELS, LiveSimulator
 from dtwin.physics.nameplate import preset
 
+from . import geo
+
 EDGE_RISE_K = 55.0        # node-side alarm: top-oil rise over ambient at its rated value
 EDGE_LOAD_PU = 1.0        # node-side alarm: mean phase current above rating
 
@@ -62,13 +64,15 @@ class Packet:
     gw_wall: float = None        # gateway receive and forward, wall clock
     prewarm: bool = False
     replayed: bool = False       # sent late from the node buffer
+    rssi_dbm: float = None       # gateway receive metadata, SIMULATED (link-budget mean + seeded
+    snr_db: float = None         # shadowing + fading); never part of the payload
 
     def to_json(self):
         return dataclasses.asdict(self)
 
 
 class Node:
-    def __init__(self, asset, start, interval_min, buffer_max):
+    def __init__(self, asset, start, interval_min, buffer_max, link=None):
         np_ = preset(asset.rating_kva)
         np_.tag = asset.id
         sim = asset.sim or {}
@@ -82,6 +86,21 @@ class Node:
         self.outbox = deque(maxlen=buffer_max)     # waiting for an acknowledged uplink
         self.dropped_overflow = 0
         self.rng = np.random.default_rng(1000 + int(sim.get("load_seed", 7)))   # this node's air losses only
+        # simulated link quality: its own generator, so it never shifts the loss draws
+        self.radio_rng = np.random.default_rng(5000 + int(sim.get("load_seed", 7)))
+        self.link = None
+        if link:
+            lb, d_m = link
+            shadow = float(np.random.default_rng(9000 + int(sim.get("load_seed", 7))).normal(0, lb["shadowing_sd_db"]))
+            self.link = {"mean_rssi": geo.rx_power_dbm(d_m, lb) + shadow, "noise": geo.noise_floor_dbm(lb)}
+
+    def stamp(self, p):
+        """Gateway receive metadata for one packet: simulated RSSI and SNR."""
+        if not self.link:
+            return
+        rssi = self.link["mean_rssi"] + float(self.radio_rng.normal(0, 2.0))
+        p.rssi_dbm = round(rssi, 1)
+        p.snr_db = round(min(rssi - self.link["noise"], 12.0), 1)     # LoRa SNR saturates near +10-12 dB
 
     def _edge_alarm(self, s):
         cur = [s[c] for c in ("IR", "IY", "IB") if s.get(c) is not None]
@@ -121,7 +140,10 @@ class FleetSim:
             start = now - timedelta(minutes=now.minute % int(self.interval_min))
         self.t = start
         buf = int(fleet.radio.get("node_buffer_packets", 192))
-        self.nodes = {a.id: Node(a, start, self.interval_min, buf) for a in fleet.monitored}
+        lb = fleet.link_budget if (fleet.link_budget or {}).get("sensitivity_dbm") else None
+        self.nodes = {a.id: Node(a, start, self.interval_min, buf,
+                                 link=(lb, fleet.distance_m(a, fleet.gateways[a.gateway])) if lb else None)
+                      for a in fleet.monitored}
         self.gateways = {g.id: g for g in fleet.gateways.values() if g.existing}
         self.cfg = {"faults": {}, "comm_cut": set(), "node_down": set(), "gateway_down": set(),
                     "packet_loss": 0.0, "capacity": {}}
@@ -161,6 +183,7 @@ class FleetSim:
                     continue                                   # lost in the air: never reaches the gateway
                 p.replayed = (not prewarm) and p.ts < self.t.isoformat(timespec="seconds")
                 p.gateway_id, p.gw_wall = gid, wall()
+                n.stamp(p)
                 sent.append(p)
             waiting = sum(len(n.outbox) for n in reach)
             ups.append({"gateway_id": gid, "sim_time": self.t.isoformat(timespec="seconds"),

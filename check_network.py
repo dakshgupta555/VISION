@@ -92,6 +92,151 @@ def strip(state):
                       sort_keys=True, default=str)
 
 
+def geo_checks(fleet, skip_ui):
+    """14-22: geography, coverage, the facility-location MILP, the demo, the map UI."""
+    from dtwin_network import geo
+    from dtwin_network.demo import Demo
+
+    # 14 haversine against reference distances (WGS84 geodesic references; sphere within 0.5 %)
+    refs = [("1 degree of latitude on the mean sphere", (0, 77.0, 1, 77.0), 111_195.1),
+            ("London - Paris", (51.5074, -0.1278, 48.8566, 2.3522), 343_920.0),
+            ("Los Angeles LAX - New York JFK", (33.9425, -118.4081, 40.6398, -73.7789), 3_983_000.0)]
+    errs = [(n, abs(geo.haversine_m(*p) - ref) / ref) for n, p, ref in refs]
+    check("14 haversine within 0.5 % of reference distances", all(e < 0.005 for _, e in errs),
+          ", ".join(f"{n.split(' ')[0]} {100 * e:.2f} %" for n, e in errs))
+    m = planner.Model(fleet)
+    full = all(abs(m.d[a.id][g.id] - geo.haversine_m(a.lat, a.lon, g.lat, g.lon)) < 1e-6 for a in m.T for g in m.G)
+    check("14 distance matrix = haversine for all 52 x 8 transformer-gateway pairs", full and len(m.d) == 52)
+
+    # 15 coverage: inside / outside the radius, and a radius edit moves feasibility as expected
+    a, g = fleet.assets["DT-001"], fleet.gateways["GW-A"]
+    d = fleet.distance_m(a, g)
+    ins = geo.pair(a, g, d, d + 1)["feasible"] and not geo.pair(a, g, d, d - 1)["feasible"]
+    check("15 a point just inside the radius is covered, just outside is not", ins, f"DT-001 to GW-A {d:.0f} m")
+    cut = planner.Model(fleet, overrides={"GW-A": {"radius_m": 1500}})
+    expect = sorted(x.id for x in fleet.assets.values()
+                    if m.ok[x.id, "GW-A"] and geo.haversine_m(x.lat, x.lon, g.lat, g.lon) > 1500)
+    moved = sorted(x.id for x in fleet.assets.values() if m.ok[x.id, "GW-A"] and not cut.ok[x.id, "GW-A"])
+    check("15 cutting GW-A's radius to 1.5 km removes exactly the transformers beyond 1.5 km", moved == expect and moved,
+          f"{len(moved)} lost, e.g. {', '.join(moved[:4])}")
+    lbm = planner.Model(fleet, link_budget=True)
+    weak = [(x.id, gg.id) for x in m.T for gg in m.G if m.ok[x.id, gg.id] and not lbm.ok[x.id, gg.id]]
+    wp = geo.pair(fleet.assets[weak[0][0]], fleet.gateways[weak[0][1]], m.d[weak[0][0]][weak[0][1]],
+                  fleet.gateways[weak[0][1]].radius_m, fleet.link_budget, True) if weak else None
+    check("15 link budget on: some in-radius pairs fail on estimated margin, with that reason", bool(weak)
+          and "margin" in wp["why"] and wp["within_assumed_radius"], f"{len(weak)} pairs, e.g. {weak[0] if weak else ''}")
+
+    # 16 capacity and feasibility of every assignment, many assumption sets
+    bad, n = [], 0
+    for kw in ({}, {"link_budget": True}, {"overrides": {"GW-A": {"radius_m": 1500}, "CG-2": {"cost_inr": 40000}}},
+               {"radius_scale": 0.8}, {"overrides": {"GW-B": {"max_nodes": 4}}}):
+        mm = planner.Model(fleet, **{k: v for k, v in kw.items() if k in ("overrides", "link_budget", "radius_scale")})
+        for B in (0, 300000, 700000, 1200000):
+            for p in (planner.solve(fleet, B, model=mm), planner.greedy(fleet, B, model=mm)):
+                n += 1
+                load = {}
+                for t, gg in p["assign"].items():
+                    load[gg] = load.get(gg, 0) + 1
+                    if not mm.ok[t, gg] or gg not in p["gateways_built"]:
+                        bad.append((t, gg, p["kind"]))
+                bad += [(gg, "over capacity") for gg, k in load.items() if k > mm.cap[gg]]
+    check("16 no assignment to an infeasible or unbuilt gateway, no gateway over max_nodes", not bad,
+          f"{n} plans, {len(bad)} violations {bad[:2]}")
+
+    # 17 budget sweep: 25 budgets, never exceeded, optimiser >= greedy
+    over, worse = [], []
+    for B in range(0, 1200001, 50000):
+        for kw in ({}, {"link_budget": True}):
+            o, gr = planner.solve(fleet, B, **kw), planner.greedy(fleet, B, **kw)
+            if o["capital_inr"] > B or gr["capital_inr"] > B or not o["within_budget"]:
+                over.append(B)
+            if o["risk_covered"] < gr["risk_covered"] - 1e-6:
+                worse.append(B)
+    check("17 25 budgets x link budget off/on: never over budget, optimiser risk >= greedy at every budget",
+          not over and not worse, f"over {over[:3]}, worse {worse[:3]}")
+
+    # 18 each high-risk transformer left out carries the correct binding reason (brute force)
+    wrong, seen = [], set()
+    for kw, B in (({}, 250000), ({"radius_scale": 0.2}, 1200000),
+                  ({"radius_scale": 0.8, "overrides": {"GW-A": {"max_nodes": 5}}}, 1200000), ({"link_budget": True}, 400000)):
+        mm = planner.Model(fleet, **kw)
+        p = planner.solve(fleet, B, model=mm)
+        load = {x["id"]: x["used"] for x in p["gateway_load"]}
+        for u in p["uncovered_high"]:
+            seen.add(u["reason"])
+            feas = [gg.id for gg in mm.G if geo.haversine_m(fleet.assets[u["id"]].lat, fleet.assets[u["id"]].lon,
+                                                             gg.lat, gg.lon) <= mm.radius[gg.id] and mm.ok[u["id"], gg.id]]
+            built = [x for x in feas if x in p["gateways_built"]]
+            truth = ("range" if not feas else "capacity" if built and all(load[x] >= mm.cap[x] for x in built)
+                     and not [x for x in feas if x not in p["gateways_built"]] else "budget")
+            if truth != u["reason"]:
+                wrong.append((u["id"], u["reason"], truth))
+    check("18 high-risk transformers left out: reason (range / capacity / budget) matches brute force",
+          not wrong and seen == {"range", "capacity", "budget"}, f"reasons seen {sorted(seen)}, wrong {wrong[:2]}")
+
+    # 19 uncovered detection matches a brute-force check
+    mism = 0
+    for kw, B in (({}, 0), ({}, 550000), ({"link_budget": True}, 400000), ({"overrides": {"GW-C": {"radius_m": 800}}}, 300000)):
+        mm = planner.Model(fleet, **kw)
+        p = planner.solve(fleet, B, model=mm)
+        lb_on = mm.use_lb
+        brute = sorted(t.id for t in fleet.assets.values() if not any(
+            geo.haversine_m(t.lat, t.lon, fleet.gateways[gg].lat, fleet.gateways[gg].lon) <= mm.radius[gg]
+            and (not lb_on or geo.link_margin_db(geo.haversine_m(t.lat, t.lon, fleet.gateways[gg].lat, fleet.gateways[gg].lon),
+                                                 fleet.link_budget) >= fleet.link_budget["required_margin_db"])
+            for gg in p["gateways_built"]))
+        mism += brute != p["uncovered"]
+    check("19 uncovered transformers = brute-force check, 4 assumption sets", mism == 0)
+
+    # 20-21 demo end to end, deterministic
+    d1, d2 = Demo(fleet), Demo(fleet)
+    steps = [d1.step(k) for k in range(1, 7)]
+    fails = [(s["step"], k) for s in steps for k, ok in s["expect"].items() if not ok]
+    check("20 six-step demo: every step's expected state holds", not fails, f"{fails[:3]}")
+    s2, s3 = steps[1]["overview"]["devices"], steps[2]["overview"]["devices"]
+    o2 = next(x for x in s2 if x["id"] == "DT-004")
+    o3 = next(x for x in s3 if x["id"] == "DT-004")
+    check("20 comm outage: DT-004 stale, health unchanged from before the cut, no fault alarm",
+          o3["comms"]["status"] == "stale" and o3["health"]["index"] == o2["health"]["index"]
+          and o3["health"]["level"] == "ok" and not o3["twin"]["alerts"] and not o3["health"]["verified"],
+          f"index {o2['health']['index']} -> {o3['health']['index']}, {o3['comms']['status']}")
+    one = {x["id"]: x["health"] for x in steps[0]["overview"]["devices"]}
+    two = {x["id"]: x["health"] for x in s2}
+    changed = sorted(k for k in one if one[k]["level"] != two[k]["level"])
+    check("20 abnormal event: only DT-007's state changes between steps 1 and 2", changed == ["DT-007"], ", ".join(changed))
+    same = all(json.dumps({k: v for k, v in d2.step(s["step"]).items() if k != "overview"}, sort_keys=True, default=str)
+               == json.dumps({k: v for k, v in s.items() if k != "overview"}, sort_keys=True, default=str) for s in steps)
+    check("21 demo is deterministic: a second run gives identical captions, plans and highlights", same)
+    d1.reset()
+    check("21 reset returns to step 1", d1.done == 0 and d1.step(1)["caption"] == steps[0]["caption"])
+
+    # 22 map UI: each demo step and the offline fallback at 1366x768, no console errors
+    if skip_ui:
+        print("  SKIP  22 map UI screenshots (--skip-ui)")
+        return
+    url = next((a.split("=", 1)[1] for a in sys.argv if a.startswith("--net-url=")), "http://localhost:5180")
+    try:
+        urllib.request.urlopen(url, timeout=5).read()
+        urllib.request.urlopen(url + "/api/net/geo", timeout=10).read()
+    except OSError as e:
+        check("22 network app reachable for the map UI checks", False, f"{url}: {e}")
+        return
+    outs = []
+    for k in range(1, 7):
+        r = subprocess.run(["node", "scripts/shot.mjs", "--url", url, "--tab", "map", "--demo", str(k), "--full",
+                            "--out", str(ROOT / "screens" / f"geo_demo_{k}.png"), "--wait", "2500"],
+                           cwd=ROOT / "network-dashboard", capture_output=True, text=True, timeout=300)
+        outs.append((k, r.returncode, r.stdout.strip().splitlines()[-1] if r.stdout.strip() else r.stderr[-200:]))
+    r = subprocess.run(["node", "scripts/shot.mjs", "--url", url, "--tab", "map", "--offline", "--full",
+                        "--out", str(ROOT / "screens" / "geo_offline.png"), "--wait", "8000"],
+                       cwd=ROOT / "network-dashboard", capture_output=True, text=True, timeout=300)
+    off = r.returncode == 0 and "map offline=yes" in r.stdout
+    check("22 map: six demo-step screenshots at 1366x768, no console errors", all(rc == 0 for _, rc, _ in outs),
+          "; ".join(f"{k}:{'ok' if rc == 0 else msg}" for k, rc, msg in outs))
+    check("22 map with tiles blocked switches to the offline grid, no console errors", off,
+          (r.stdout.strip().splitlines() or [""])[0][-120:])
+
+
 def main():
     skip_ui = "--skip-ui" in sys.argv
     fleet = load()
@@ -259,10 +404,10 @@ def main():
     raw = yaml.safe_load(open(FLEET_YAML))
     msgs = []
     for mutate, must in (
-            (lambda c: c["assets"][20].pop("xy_km"), [raw["assets"][20]["id"], "xy_km"]),
+            (lambda c: c["assets"][20].pop("lat"), [raw["assets"][20]["id"], "lat"]),
             (lambda c: (c["assets"][3].pop("node_cost_inr"), c["costs"].pop("node_cost_inr")), [raw["assets"][3]["id"], "node_cost_inr"]),
-            (lambda c: (c["gateways"][5].pop("cost_inr"), c["costs"].pop("gateway_cost_inr")), [raw["gateways"][5]["id"], "cost_inr"]),
-            (lambda c: c["assets"][0].__setitem__("xy_km", ["a", 1]), [raw["assets"][0]["id"], "xy_km"])):
+            (lambda c: (c["gateways"][5].pop("install_cost_inr"), c["costs"].pop("gateway_cost_inr")), [raw["gateways"][5]["id"], "install_cost_inr"]),
+            (lambda c: c["assets"][0].__setitem__("lon", "east"), [raw["assets"][0]["id"], "lon"])):
         c = copy.deepcopy(raw)
         mutate(c)
         try:
@@ -277,6 +422,8 @@ def main():
     p = planner.solve(fleet, 10000)
     check("12 a budget below the cheapest addition says so", p["nodes"] == [] and "can be added within this budget" in p.get("message", ""),
           p.get("message"))
+
+    geo_checks(fleet, skip_ui)
 
     # 13 existing dashboard --------------------------------------------------------------------------
     if skip_ui:

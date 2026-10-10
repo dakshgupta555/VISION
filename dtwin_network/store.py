@@ -65,6 +65,7 @@ class Device:
         self.comm_since = None
         self.level = None
         self.last_packet = None      # hop stamps of the newest live packet
+        self.link = deque(maxlen=20)  # (rssi, snr) of this node's own recent packets, SIMULATED
 
 
 class NetworkStore:
@@ -197,6 +198,8 @@ class NetworkStore:
         if d.last_seen is None or ts >= d.last_seen:
             d.last_seen, d.last_gateway = ts, gid
         d.last_wall = rx
+        if p.get("rssi_dbm") is not None and not prewarm:
+            d.link.append((float(p["rssi_dbm"]), float(p.get("snr_db") or 0.0)))
         d.version += 1
         if not prewarm:
             d.last_packet = {"seq": seq, "ts": _iso(ts), "priority": p.get("priority", "normal"),
@@ -351,6 +354,11 @@ class NetworkStore:
             return out
         out["comms"].update(received=d.received, lost=d.lost, duplicates=d.duplicates, rejected=d.rejected,
                             late=d.late, last_gateway=d.last_gateway, last_packet=d.last_packet)
+        out["link_simulated"] = None if not d.link else {
+            "rssi_dbm": d.link[-1][0], "snr_db": d.link[-1][1],
+            "rssi_mean_dbm": round(sum(x[0] for x in d.link) / len(d.link), 1),
+            "snr_mean_db": round(sum(x[1] for x in d.link) / len(d.link), 1), "packets": len(d.link),
+            "label": "simulated: link-budget mean + seeded shadowing and fading, not a measurement"}
         out["analysis"] = {"ms": d.analysis_ms, "error": d.analysis_error, "samples": len(d.rows)}
         if st:
             hs = st["countdown"]["hotspot"]

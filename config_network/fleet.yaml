@@ -1,118 +1,144 @@
 # Synthetic district for the GridTwin network dashboard. ILLUSTRATIVE ONLY:
+# Synthetic demonstration layout - not real utility assets. Placed near Hoskote,
+# Bengaluru Rural, Karnataka (origin_latlon); coverage is an estimated proximity radius.
 # positions, radio coverage, telemetry and costs are not CPRI infrastructure or
 # procurement data. Regenerate with: python -m dtwin_network.make_fleet
 district:
-  name: Synthetic district, simulated
+  name: Synthetic district near Hoskote, Bengaluru Rural (simulated)
+  area: peri-urban area around Hoskote, Bengaluru Rural district, Karnataka
+  origin_latlon:
+  - 13.0249
+  - 77.729
   extent_km:
   - 15.0
   - 10.2
+  positions_label: "Synthetic demonstration layout \u2014 not real utility assets"
   disclaimer: 'Simulated network: positions, radio coverage, telemetry and costs are illustrative, not CPRI infrastructure
     or procurement data.'
 radio:
   topology: 'LoRaWAN star-of-stars: node -> gateway -> backend. No multi-hop mesh; gateways forward packets and
     never average them.'
-  coverage_radius_km: 3.0
+  assumed_radius_m: 3000
   reporting_interval_min: 15
   stale_after_missed: 2
   offline_after_missed: 6
   node_buffer_packets: 192
+  coverage_label: "ESTIMATED PROXIMITY COVERAGE \u2014 not verified LoRa coverage"
+link_budget:
+  enabled: false
+  model: log-distance path loss, rough planning model, not a propagation prediction
+  frequency_mhz: 866.0
+  tx_power_dbm: 14.0
+  tx_antenna_gain_dbi: 2.15
+  rx_antenna_gain_dbi: 5.0
+  cable_loss_db: 2.0
+  reference_distance_m: 100.0
+  path_loss_exponent: 3.5
+  extra_loss_db: 20.0
+  spreading_factor: 10
+  bandwidth_hz: 125000
+  noise_figure_db: 6.0
+  sensitivity_dbm:
+    SF7: -123.0
+    SF8: -126.0
+    SF9: -129.0
+    SF10: -132.0
+    SF11: -134.5
+    SF12: -137.0
+  required_margin_db: 10.0
+  shadowing_sd_db: 6.0
 costs:
   currency: INR
   illustrative: true
+  label: Illustrative costs
   node_cost_inr: 22000
   node_annual_inr: 1500
   gateway_cost_inr: 120000
   gateway_annual_inr: 18000
   plan_years: 5
+planning:
+  budget_inr: 400000
 gateways:
 - id: GW-A
   name: Substation North (existing)
-  xy_km:
-  - 3.6
-  - 6.2
-  capacity_nodes: 8
-  existing: true
+  lat: 13.080595
+  lon: 77.762193
   coordinates_synthetic: true
-  coverage_radius_km: 3.0
-  cost_inr: 120000
+  assumed_radius_m: 3000
+  install_cost_inr: 120000
   annual_inr: 18000
+  max_nodes: 8
+  status: existing
 - id: GW-B
   name: Ward office (existing)
-  xy_km:
-  - 8.4
-  - 6.8
-  capacity_nodes: 8
-  existing: true
+  lat: 13.085985
+  lon: 77.806451
   coordinates_synthetic: true
-  coverage_radius_km: 3.0
-  cost_inr: 120000
+  assumed_radius_m: 3000
+  install_cost_inr: 120000
   annual_inr: 18000
+  max_nodes: 8
+  status: existing
 - id: GW-C
   name: Pumping station (existing)
-  xy_km:
-  - 10.8
-  - 2.8
-  capacity_nodes: 6
-  existing: true
+  lat: 13.050053
+  lon: 77.82858
   coordinates_synthetic: true
-  coverage_radius_km: 3.0
-  cost_inr: 120000
+  assumed_radius_m: 3000
+  install_cost_inr: 120000
   annual_inr: 18000
+  max_nodes: 6
+  status: existing
 - id: CG-1
   name: School rooftop (candidate)
-  xy_km:
-  - 1.6
-  - 2.4
-  existing: false
+  lat: 13.046459
+  lon: 77.743753
   coordinates_synthetic: true
-  coverage_radius_km: 3.0
-  capacity_nodes: 12
-  cost_inr: 120000
+  assumed_radius_m: 3000
+  install_cost_inr: 120000
   annual_inr: 18000
+  max_nodes: 12
+  status: candidate
 - id: CG-2
   name: Water tank (candidate)
-  xy_km:
-  - 5.6
-  - 2.2
-  existing: false
+  lat: 13.044663
+  lon: 77.780634
   coordinates_synthetic: true
-  coverage_radius_km: 3.0
-  capacity_nodes: 12
-  cost_inr: 120000
+  assumed_radius_m: 3000
+  install_cost_inr: 120000
   annual_inr: 18000
+  max_nodes: 12
+  status: candidate
 - id: CG-3
   name: Market building (candidate)
-  xy_km:
-  - 6.2
-  - 9.4
-  existing: false
+  lat: 13.109341
+  lon: 77.786166
   coordinates_synthetic: true
-  coverage_radius_km: 3.0
-  capacity_nodes: 12
-  cost_inr: 120000
+  assumed_radius_m: 3000
+  install_cost_inr: 120000
   annual_inr: 18000
+  max_nodes: 12
+  status: candidate
 - id: CG-4
   name: Telecom mast (candidate)
-  xy_km:
-  - 12.4
-  - 7.8
-  existing: false
+  lat: 13.094968
+  lon: 77.843332
   coordinates_synthetic: true
-  coverage_radius_km: 3.0
-  capacity_nodes: 12
-  cost_inr: 120000
+  assumed_radius_m: 3000
+  install_cost_inr: 120000
   annual_inr: 18000
+  max_nodes: 12
+  status: candidate
 - id: CG-5
   name: Depot (candidate)
-  xy_km:
-  - 13.4
-  - 5.0
-  existing: false
+  lat: 13.069816
+  lon: 77.852552
   coordinates_synthetic: true
-  coverage_radius_km: 3.0
-  capacity_nodes: 12
-  cost_inr: 120000
+  assumed_radius_m: 3000
+  install_cost_inr: 120000
   annual_inr: 18000
+  max_nodes: 12
+  status: candidate
 assets:
 - id: DT-001
   monitored: true
@@ -120,9 +146,6 @@ assets:
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-A
-  xy_km:
-  - 3.1
-  - 5.4
   coordinates_synthetic: true
   sim:
     load_seed: 7
@@ -137,15 +160,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.073409
+  lon: 77.757583
 - id: DT-002
   monitored: true
   gateway: GW-A
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-B
-  xy_km:
-  - 2.2
-  - 7.1
   coordinates_synthetic: true
   sim:
     load_seed: 11
@@ -160,15 +182,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.08868
+  lon: 77.749285
 - id: DT-003
   monitored: true
   gateway: GW-A
   nameplate:
     rating_kva: 250
   manufacturer: Mfr-A
-  xy_km:
-  - 4.7
-  - 7.3
   coordinates_synthetic: true
   sim:
     load_seed: 12
@@ -183,15 +204,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.090477
+  lon: 77.772336
 - id: DT-004
   monitored: true
   gateway: GW-A
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-C
-  xy_km:
-  - 4.4
-  - 4.9
   coordinates_synthetic: true
   sim:
     load_seed: 13
@@ -206,15 +226,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.068917
+  lon: 77.769569
 - id: DT-005
   monitored: true
   gateway: GW-A
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-B
-  xy_km:
-  - 1.8
-  - 5.6
   coordinates_synthetic: true
   sim:
     load_seed: 14
@@ -229,15 +248,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.075205
+  lon: 77.745597
 - id: DT-006
   monitored: true
   gateway: GW-B
   nameplate:
     rating_kva: 250
   manufacturer: Mfr-D
-  xy_km:
-  - 7.6
-  - 7.9
   coordinates_synthetic: true
   sim:
     load_seed: 15
@@ -252,15 +270,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.095867
+  lon: 77.799075
 - id: DT-007
   monitored: true
   gateway: GW-B
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-A
-  xy_km:
-  - 9.6
-  - 7.4
   coordinates_synthetic: true
   sim:
     load_seed: 16
@@ -275,15 +292,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.091375
+  lon: 77.817515
 - id: DT-008
   monitored: true
   gateway: GW-B
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-C
-  xy_km:
-  - 8.9
-  - 5.5
   coordinates_synthetic: true
   sim:
     load_seed: 17
@@ -298,15 +314,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.074307
+  lon: 77.811061
 - id: DT-009
   monitored: true
   gateway: GW-B
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-B
-  xy_km:
-  - 7.2
-  - 6.1
   coordinates_synthetic: true
   sim:
     load_seed: 18
@@ -321,15 +336,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.079697
+  lon: 77.795386
 - id: DT-010
   monitored: true
   gateway: GW-C
   nameplate:
     rating_kva: 250
   manufacturer: Mfr-D
-  xy_km:
-  - 11.6
-  - 3.6
   coordinates_synthetic: true
   sim:
     load_seed: 19
@@ -344,15 +358,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.057239
+  lon: 77.835956
 - id: DT-011
   monitored: true
   gateway: GW-C
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-C
-  xy_km:
-  - 10.1
-  - 2.0
   coordinates_synthetic: true
   sim:
     load_seed: 20
@@ -367,15 +380,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.042866
+  lon: 77.822125
 - id: DT-012
   monitored: true
   gateway: GW-C
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-A
-  xy_km:
-  - 11.9
-  - 1.9
   coordinates_synthetic: true
   sim:
     load_seed: 21
@@ -390,15 +402,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.041968
+  lon: 77.838722
 - id: DT-101
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-B
-  xy_km:
-  - 2.93
-  - 7.31
   coordinates_synthetic: true
   metadata:
     age_years: 24
@@ -409,15 +420,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.090567
+  lon: 77.756016
 - id: DT-102
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-C
-  xy_km:
-  - 3.19
-  - 6.78
   coordinates_synthetic: true
   metadata:
     age_years: 18
@@ -428,15 +438,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.085805
+  lon: 77.758413
 - id: DT-103
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-D
-  xy_km:
-  - 3.83
-  - 6.64
   coordinates_synthetic: true
   metadata:
     age_years: 30
@@ -447,15 +456,14 @@ assets:
     past_failures_5y: 2
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.084548
+  lon: 77.764314
 - id: DT-104
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 160
   manufacturer: Mfr-C
-  xy_km:
-  - 3.18
-  - 5.89
   coordinates_synthetic: true
   metadata:
     age_years: 9
@@ -466,15 +474,14 @@ assets:
     past_failures_5y: 3
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.077811
+  lon: 77.758321
 - id: DT-105
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-D
-  xy_km:
-  - 2.53
-  - 6.51
   coordinates_synthetic: true
   metadata:
     age_years: 29
@@ -485,15 +492,14 @@ assets:
     past_failures_5y: 2
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.08338
+  lon: 77.752327
 - id: DT-106
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-D
-  xy_km:
-  - 3.33
-  - 5.57
   coordinates_synthetic: true
   metadata:
     age_years: 24
@@ -504,15 +510,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.074936
+  lon: 77.759704
 - id: DT-107
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 25
   manufacturer: Mfr-D
-  xy_km:
-  - 4.49
-  - 5.85
   coordinates_synthetic: true
   metadata:
     age_years: 24
@@ -523,15 +528,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.077451
+  lon: 77.770399
 - id: DT-108
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 25
   manufacturer: Mfr-A
-  xy_km:
-  - 9.4
-  - 6.1
   coordinates_synthetic: true
   metadata:
     age_years: 26
@@ -542,15 +546,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.079697
+  lon: 77.815671
 - id: DT-109
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-D
-  xy_km:
-  - 8.5
-  - 6.7
   coordinates_synthetic: true
   metadata:
     age_years: 25
@@ -561,15 +564,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.085087
+  lon: 77.807373
 - id: DT-110
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-D
-  xy_km:
-  - 10.54
-  - 7.68
   coordinates_synthetic: true
   metadata:
     age_years: 29
@@ -580,15 +582,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.09389
+  lon: 77.826182
 - id: DT-111
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 25
   manufacturer: Mfr-B
-  xy_km:
-  - 8.95
-  - 5.68
   coordinates_synthetic: true
   metadata:
     age_years: 14
@@ -599,15 +600,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.075924
+  lon: 77.811522
 - id: DT-112
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-C
-  xy_km:
-  - 10.21
-  - 7.12
   coordinates_synthetic: true
   metadata:
     age_years: 3
@@ -618,15 +618,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.08886
+  lon: 77.82314
 - id: DT-113
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-C
-  xy_km:
-  - 7.7
-  - 7.01
   coordinates_synthetic: true
   metadata:
     age_years: 13
@@ -637,15 +636,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.087872
+  lon: 77.799997
 - id: DT-114
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-C
-  xy_km:
-  - 9.88
-  - 3.38
   coordinates_synthetic: true
   metadata:
     age_years: 29
@@ -656,15 +654,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.055263
+  lon: 77.820097
 - id: DT-115
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 250
   manufacturer: Mfr-A
-  xy_km:
-  - 11.01
-  - 2.34
   coordinates_synthetic: true
   metadata:
     age_years: 26
@@ -675,15 +672,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.04592
+  lon: 77.830516
 - id: DT-116
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 25
   manufacturer: Mfr-B
-  xy_km:
-  - 11.44
-  - 2.36
   coordinates_synthetic: true
   metadata:
     age_years: 33
@@ -694,15 +690,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.0461
+  lon: 77.834481
 - id: DT-117
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 250
   manufacturer: Mfr-B
-  xy_km:
-  - 10.54
-  - 3.55
   coordinates_synthetic: true
   metadata:
     age_years: 26
@@ -713,15 +708,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.05679
+  lon: 77.826182
 - id: DT-118
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-C
-  xy_km:
-  - 1.57
-  - 2.58
   coordinates_synthetic: true
   metadata:
     age_years: 19
@@ -732,15 +726,14 @@ assets:
     past_failures_5y: 2
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.048076
+  lon: 77.743476
 - id: DT-119
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-A
-  xy_km:
-  - 1.94
-  - 2.59
   coordinates_synthetic: true
   metadata:
     age_years: 30
@@ -751,15 +744,14 @@ assets:
     past_failures_5y: 3
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.048166
+  lon: 77.746887
 - id: DT-120
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 160
   manufacturer: Mfr-C
-  xy_km:
-  - 2.05
-  - 2.47
   coordinates_synthetic: true
   metadata:
     age_years: 32
@@ -770,15 +762,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.047088
+  lon: 77.747902
 - id: DT-121
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-D
-  xy_km:
-  - 0.97
-  - 2.8
   coordinates_synthetic: true
   metadata:
     age_years: 18
@@ -789,15 +780,14 @@ assets:
     past_failures_5y: 2
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.050053
+  lon: 77.737944
 - id: DT-122
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 250
   manufacturer: Mfr-A
-  xy_km:
-  - 1.32
-  - 2.92
   coordinates_synthetic: true
   metadata:
     age_years: 17
@@ -808,15 +798,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.051131
+  lon: 77.741171
 - id: DT-123
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-D
-  xy_km:
-  - 4.86
-  - 2.15
   coordinates_synthetic: true
   metadata:
     age_years: 26
@@ -827,15 +816,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.044214
+  lon: 77.773811
 - id: DT-124
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-C
-  xy_km:
-  - 5.79
-  - 1.97
   coordinates_synthetic: true
   metadata:
     age_years: 25
@@ -846,15 +834,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.042597
+  lon: 77.782386
 - id: DT-125
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-C
-  xy_km:
-  - 5.85
-  - 1.85
   coordinates_synthetic: true
   metadata:
     age_years: 23
@@ -865,15 +852,14 @@ assets:
     past_failures_5y: 3
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.041519
+  lon: 77.782939
 - id: DT-126
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-A
-  xy_km:
-  - 5.36
-  - 1.95
   coordinates_synthetic: true
   metadata:
     age_years: 8
@@ -884,15 +870,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.042417
+  lon: 77.778421
 - id: DT-127
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-B
-  xy_km:
-  - 5.97
-  - 2.56
   coordinates_synthetic: true
   metadata:
     age_years: 8
@@ -903,15 +888,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.047897
+  lon: 77.784045
 - id: DT-128
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-C
-  xy_km:
-  - 5.56
-  - 9.8
   coordinates_synthetic: true
   metadata:
     age_years: 10
@@ -922,15 +906,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.112934
+  lon: 77.780265
 - id: DT-129
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 160
   manufacturer: Mfr-B
-  xy_km:
-  - 6.71
-  - 9.24
   coordinates_synthetic: true
   metadata:
     age_years: 7
@@ -941,15 +924,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.107904
+  lon: 77.790868
 - id: DT-130
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 25
   manufacturer: Mfr-D
-  xy_km:
-  - 5.79
-  - 9.3
   coordinates_synthetic: true
   metadata:
     age_years: 14
@@ -960,15 +942,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.108443
+  lon: 77.782386
 - id: DT-131
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-A
-  xy_km:
-  - 6.13
-  - 8.83
   coordinates_synthetic: true
   metadata:
     age_years: 5
@@ -979,15 +960,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.104221
+  lon: 77.785521
 - id: DT-132
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 25
   manufacturer: Mfr-A
-  xy_km:
-  - 12.6
-  - 8.12
   coordinates_synthetic: true
   metadata:
     age_years: 3
@@ -998,15 +978,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.097843
+  lon: 77.845176
 - id: DT-133
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 25
   manufacturer: Mfr-B
-  xy_km:
-  - 12.67
-  - 6.25
   coordinates_synthetic: true
   metadata:
     age_years: 7
@@ -1017,15 +996,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.081044
+  lon: 77.845822
 - id: DT-134
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-A
-  xy_km:
-  - 12.06
-  - 7.88
   coordinates_synthetic: true
   metadata:
     age_years: 21
@@ -1036,15 +1014,14 @@ assets:
     past_failures_5y: 0
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.095687
+  lon: 77.840197
 - id: DT-135
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-C
-  xy_km:
-  - 13.7
-  - 5.14
   coordinates_synthetic: true
   metadata:
     age_years: 27
@@ -1055,15 +1032,14 @@ assets:
     past_failures_5y: 1
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.071073
+  lon: 77.855319
 - id: DT-136
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 63
   manufacturer: Mfr-C
-  xy_km:
-  - 13.53
-  - 5.45
   coordinates_synthetic: true
   metadata:
     age_years: 17
@@ -1074,15 +1050,14 @@ assets:
     past_failures_5y: 3
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.073858
+  lon: 77.853751
 - id: DT-137
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 160
   manufacturer: Mfr-C
-  xy_km:
-  - 13.6
-  - 5.5
   coordinates_synthetic: true
   metadata:
     age_years: 18
@@ -1093,15 +1068,14 @@ assets:
     past_failures_5y: 2
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.074307
+  lon: 77.854396
 - id: DT-138
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 100
   manufacturer: Mfr-B
-  xy_km:
-  - 0.53
-  - 9.38
   coordinates_synthetic: true
   metadata:
     age_years: 29
@@ -1112,15 +1086,14 @@ assets:
     past_failures_5y: 3
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.109162
+  lon: 77.733887
 - id: DT-139
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 250
   manufacturer: Mfr-B
-  xy_km:
-  - 0.37
-  - 9.75
   coordinates_synthetic: true
   metadata:
     age_years: 17
@@ -1131,15 +1104,14 @@ assets:
     past_failures_5y: 3
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.112485
+  lon: 77.732412
 - id: DT-140
   monitored: false
   gateway: null
   nameplate:
     rating_kva: 160
   manufacturer: Mfr-B
-  xy_km:
-  - 14.07
-  - 1.03
   coordinates_synthetic: true
   metadata:
     age_years: 20
@@ -1150,3 +1122,5 @@ assets:
     past_failures_5y: 3
   node_cost_inr: 22000
   node_annual_inr: 1500
+  lat: 13.034153
+  lon: 77.85873

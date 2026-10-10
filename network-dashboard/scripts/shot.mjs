@@ -21,15 +21,46 @@ const full = process.argv.includes("--full");
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
 const problems = [];
-page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text()}`); });
+// a blocked map tile's own "Failed to load resource" line is the tile failure, counted below, not a page error
+page.on("console", (m) => { if (m.type() === "error" && !/tile\.openstreetmap\.org/.test(m.location()?.url || "")) problems.push(`console: ${m.text()}`); });
 page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
-page.on("requestfailed", (r) => problems.push(`request failed: ${r.url()} ${r.failure()?.errorText}`));
-page.on("response", (r) => { if (r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
+// map tiles are counted apart: with --offline they are blocked on purpose, and a
+// tile that fails online is handled by the map's own fallback, not a page error
+const TILE = /tile\.openstreetmap\.org/;
+const tiles = { ok: 0, failed: 0 };
+page.on("requestfailed", (r) => { if (TILE.test(r.url())) tiles.failed += 1; else problems.push(`request failed: ${r.url()} ${r.failure()?.errorText}`); });
+page.on("response", (r) => { if (TILE.test(r.url())) { if (r.status() < 400) tiles.ok += 1; else tiles.failed += 1; return; }
+  if (r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
+if (process.argv.includes("--offline")) await page.route(TILE, (r) => r.abort("internetdisconnected"));
 await page.addInitScript(() => localStorage.setItem("dtwin-theme", "light"));
 await page.goto(url, { waitUntil: "domcontentloaded" });
 await page.getByText("What's happening in the network").first().waitFor({ timeout: 30000 });
-const tabName = { network: "Network twin", planner: "Deployment planner", strategy: "Strategy comparison" }[tab];
+const tabName = { network: "Network twin", map: "Map", planner: "Deployment planner", strategy: "Strategy comparison" }[tab];
 if (tab !== "network") await page.getByRole("button", { name: tabName, exact: true }).click();
+const demoStep = Number(arg("demo", 0));
+if (demoStep) {
+  await page.getByRole("button", { name: "Demo", exact: true }).click();
+  await page.getByText("Demo 1 of 6").waitFor({ timeout: 60000 });
+  for (let k = 2; k <= demoStep; k++) {
+    await page.getByRole("button", { name: "Next", exact: true }).click();
+    await page.getByText(`Demo ${k} of 6`).waitFor({ timeout: 60000 });
+  }
+}
+const gwClick = arg("gateway", null);            // map: click this gateway, optionally --radius <km>
+if (gwClick) {
+  await page.waitForTimeout(1500);
+  await page.locator(".leaflet-marker-icon").filter({ has: page.locator(`[title="${gwClick}"]`) }).first().click({ force: true });
+  await page.getByText(`Gateway ${gwClick}`).waitFor({ timeout: 10000 });
+  const r = arg("radius", null);
+  if (r) {
+    const t0 = Date.now();
+    const before = await page.getByText(/solved in \d+ ms/).first().textContent().catch(() => "");
+    await page.getByLabel("Assumed radius km").fill(r);
+    await page.waitForFunction((b) => { const el = [...document.querySelectorAll("span")].find((s) => /solved in \d+ ms/.test(s.textContent));
+      return el && el.textContent !== b; }, before, { timeout: 10000 }).catch(() => {});
+    console.log(`radius edit -> re-solved and redrawn in ${Date.now() - t0} ms (incl. 120 ms debounce)`);
+  }
+}
 if (budget) {
   await page.waitForSelector("input[type=range]");
   await page.$eval("input[type=range]", (el, v) => {
@@ -62,7 +93,8 @@ const small = await page.evaluate(() => {
 });
 mkdirSync(dirname(out), { recursive: true });
 await page.screenshot({ path: out, fullPage: full });
-console.log(`saved ${out}${hscroll ? "  WARNING: horizontal scroll" : ""}`);
+const offline = await page.evaluate(() => document.querySelector("[data-testid=geo-map]")?.dataset.offline || null);
+console.log(`saved ${out}${hscroll ? "  WARNING: horizontal scroll" : ""}${offline ? `  map offline=${offline} tiles ok=${tiles.ok} failed=${tiles.failed}` : ""}`);
 if (small.length) problems.push(`text under 14 px: ${small.slice(0, 5).join("; ")}`);
 if (problems.length) { console.log(problems.join("\n")); }
 await browser.close();
