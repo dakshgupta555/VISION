@@ -327,12 +327,36 @@ export default function HeatMapView({ fem, onResolve, live }) {
           );
         })}
       </div>
+      {fem.comparison && (
+        <div className="mt-3 border border-edge rounded px-3 py-2">
+          <div className="text-xs font-semibold text-fg">FEM against IEEE C57.91 · {fem.comparison.basis}, {fem.comparison.ambient_c} °C ambient</div>
+          <table className="w-full text-xs tabular-nums mt-1">
+            <thead><tr className="text-dim text-left">
+              <th className="font-normal">Load</th><th className="font-normal text-right">Top oil</th>
+              <th className="font-normal text-right">C57.91 hot-spot</th><th className="font-normal text-right">FEM hot-spot</th>
+              <th className="font-normal text-right">FEM − C57.91</th><th className="font-normal text-right">H (FEM)</th>
+              <th className="font-normal text-right">FEM hot-spot at</th></tr></thead>
+            <tbody>
+              {fem.comparison.rows.map((x) => (
+                <tr key={x.load_pu} className="border-t border-edge">
+                  <td>{x.load_pu.toFixed(1)} pu</td><td className="text-right">{f1(x.top_oil_c)} °C</td>
+                  <td className="text-right">{f1(x.c57_hotspot_c)} °C</td><td className="text-right">{f1(x.fem_hotspot_c)} °C</td>
+                  <td className="text-right">{x.diff_k > 0 ? "+" : ""}{f1(x.diff_k)} K</td><td className="text-right">{x.H_fem.toFixed(2)}</td>
+                  <td className="text-right">{x.hotspot_winding.toUpperCase()}, {Math.round(100 * x.hotspot_z_frac)} % of height</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="text-xs mt-1.5 text-fg">{fem.comparison.note}</p>
+        </div>
+      )}
       <div className="grid grid-cols-2 gap-4 mt-3">
         <div className="text-xs space-y-1">
           <div className="font-semibold text-fg">What is solved</div>
           <p className="text-dim">-div(k grad T) = q in each winding, axisymmetric, with q = that phase's I²R from the equivalent
             circuit over the winding volume. Every face that touches oil: -k dT/dn = h (T - T_oil(z)), h = {fem.calibration.h_w_m2k.toFixed(1)} W/m²K,
-            calibrated once so the rated mean-winding to mean-oil gradient is {fem.calibration.g_rated_k} K.</p>
+            calibrated once to a rated mean-winding to mean-oil gradient of {fem.calibration.g_rated_k} K and then frozen.
+            LV foil conducts along its height (layers in parallel); the HV wire winding does not (turn insulation in series).</p>
           <p className="text-dim tabular-nums">Oil: {f1(fem.oil.bottom_c)} °C at the bottom to {f1(fem.oil.top_c)} °C top oil (C57.91 at this
             instant); {fem.oil.assumption}. Conductor {fem.materials.conductor}; homogenised k_r / k_z: LV {fem.materials.k.lv.kr.toFixed(2)} / {fem.materials.k.lv.kz.toFixed(0)},
             HV {fem.materials.k.hv.kr.toFixed(2)} / {fem.materials.k.hv.kz.toFixed(0)} W/mK.</p>

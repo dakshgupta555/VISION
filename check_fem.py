@@ -79,19 +79,20 @@ rows = []
 for nr, nz in [(4, 24), (8, 48), (16, 96), (32, 192), (64, 384)]:
     leg = fem.PhaseLeg(NP, nr=nr, nz=nz)
     res = leg.solve(p_rated, TOP_R, AMB, h=h_prod)
-    rows.append((nr, nz, leg.elements, leg.hotspot(res)["c"] - TOP_R, leg.h))
+    rows.append((nr, nz, leg.elements, leg.hotspot(res)["c"] - TOP_R, leg.calibrated_h()))
 for k, (nr, nz, ne, rise, hc) in enumerate(rows):
     d = "" if k == 0 else f"  change {100 * (rise - rows[k - 1][3]) / rows[k - 1][3]:+.3f} %"
     print(f"      {nr:3d} x {nz:3d} cells/block  {ne:6d} elements/phase  hot-spot - top oil {rise:.4f} K"
-          f"  (h calibrated on this mesh {hc:.3f}){d}")
+          f"  (rule h on this mesh {hc:.3f}){d}")
 last = abs(rows[-1][3] - rows[-2][3]) / rows[-2][3]
 check("hot-spot rise, last two refinements", last < 0.01, f"{100 * last:.4f} % (< 1 %)")
 prod = next(x for x in rows if (x[0], x[1]) == (LEG.nr, LEG.nz))
 dp = abs(prod[3] - rows[-1][3]) / rows[-1][3]
 check("production mesh vs finest", dp < 0.01,
       f"{LEG.nr} x {LEG.nz} cells/block = {LEG.elements} elements/phase, {100 * dp:.3f} % from finest")
-dh = abs(h_prod - rows[-1][4]) / rows[-1][4]
-check("calibrated h, production vs finest", dh < 0.01, f"{h_prod:.3f} vs {rows[-1][4]:.3f} W/m2K ({100 * dh:.3f} %)")
+h_rule_prod = LEG.calibrated_h()
+dh = abs(h_rule_prod - rows[-1][4]) / rows[-1][4]
+check("calibration-rule h, production vs finest", dh < 0.01, f"{h_rule_prod:.3f} vs {rows[-1][4]:.3f} W/m2K ({100 * dh:.3f} %)")
 
 # --------------------------------------------------------------------------- #
 print("4. Energy balance: heat generated = heat leaving through the faces")
@@ -137,35 +138,53 @@ check("solve time, three phases with grids", dt < 1.0, f"{1000 * dt:.1f} ms tota
 # --------------------------------------------------------------------------- #
 print("6. Cross-check with IEEE C57.91 (steady state, 30 C ambient, same top oil)")
 cal = LEG.calibration()
-check("calibration reproduces g_r", abs(cal["g_fem_k"] - cal["g_rated_k"]) < 0.01,
-      f"h = {cal['h_w_m2k']} W/m2K gives g = {cal['g_fem_k']} K (g_r {cal['g_rated_k']} K)")
-xc = fem.cross_check(NP, leg=LEG)
-print("      load   top oil   C57.91 HS   FEM HS    FEM-C57   HS-top C57/FEM   g FEM    H FEM   HS height")
+fz = fem.config()["h_frozen"]
+check("h frozen at its one-time calibration", abs(LEG.h - fz["value"]) < 1e-9 and LEG.frozen() is not None,
+      f"h = {LEG.h:.3f} W/m2K ({cal['h_source']})")
+h_rule = LEG.calibrated_h()
+leg_rule = fem.PhaseLeg(NP)
+leg_rule._h = h_rule
+g_rule = leg_rule.calibration()["g_fem_k"]
+check("calibration rule still reproduces g_r", abs(g_rule - cal["g_rated_k"]) < 0.01,
+      f"rule on today's model gives h = {h_rule:.3f}, g = {g_rule} K (not used: h stays frozen)")
+print(f"      at the frozen h the rated FEM gradient is {cal['g_fem_k']} K against g_r {cal['g_rated_k']} K")
+check("axial path: LV foil parallel, HV wire series",
+      LEG.k["lv"]["axial"] == "parallel" and LEG.k["hv"]["axial"] == "series"
+      and abs(LEG.k["hv"]["kz"] - LEG.k["hv"]["kr"]) < 1e-12 and LEG.k["lv"]["kz"] > 100 * LEG.k["lv"]["kr"],
+      f"LV k_z {LEG.k['lv']['kz']:.1f}, HV k_z {LEG.k['hv']['kz']:.3f} = HV k_r W/mK")
+xc = fem.cross_check(NP, loads=(0.5, 1.0, 1.3), leg=LEG)
+print("      load   top oil   C57.91 HS   FEM HS    FEM-C57   HS-top C57/FEM   g FEM    H FEM   HS winding, height")
 for x in xc:
     print(f"      {x['load_pu']:4.2f}   {x['top_oil_c']:6.1f}    {x['c57_hotspot_c']:7.2f}   {x['fem_hotspot_c']:7.2f}"
           f"   {x['diff_k']:+6.2f}   {x['c57_hs_over_top_k']:5.1f} / {x['fem_hs_over_top_k']:5.1f}"
-          f"    {x['fem_gradient_k']:5.2f}   {x['H_fem']:.3f}   {x['hotspot_z_frac']:.2f}")
+          f"    {x['fem_gradient_k']:5.2f}   {x['H_fem']:.3f}   {x['hotspot_winding'].upper()}, {x['hotspot_z_frac']:.2f}")
 mono = all(xc[k + 1]["fem_hotspot_c"] > xc[k]["fem_hotspot_c"] for k in range(len(xc) - 1))
 check("FEM hot-spot rises monotonically with load", mono, "as C57.91 does")
 ref = fem.config()["hotspot_factor_reference"]
-H = cal["H_fem"]
-print(f"      H (FEM, rated) = {H:.3f}; reference {ref['value']} (band {ref['band'][0]}-{ref['band'][1]}):"
-      f" Alliander IEC 60076-7 implementation; IEC clause 8.1.4 itself not seen.")
-# The field shape against the reference with the oil-profile assumption removed:
-# under uniform oil the FEM H is set by the winding's radial conduction alone.
+H = next(x["H_fem"] for x in xc if x["load_pu"] == 1.0)
 cfg = copy.deepcopy(fem.config())
 cfg["bottom_oil_fraction"] = 0.0
 H_u = fem.PhaseLeg(NP, cfg=cfg).calibration()["H_fem"]
-check("H, uniform oil, inside the cited 1.1-1.3 band", ref["band"][0] <= H_u <= ref["band"][1],
-      f"H = {H_u:.3f} (linear oil profile: {H:.3f}, reported, not a pass criterion)")
-print("""      Why the FEM sits below C57.91 at these loads:
+print(f"      H (FEM, rated) = {H:.3f}, {H_u:.3f} under uniform oil; reference {ref['value']} (band {ref['band'][0]}-"
+      f"{ref['band'][1]}, Alliander IEC 60076-7 implementation). Reported only: the FEM is not tuned or judged against it.")
+print("""      Why FEM and C57.91 differ:
         - no duct-oil heating: oil inside the winding ducts is hotter at the top than tank
           top oil; IEC's H > 1 is largely that, and this conduction model prescribes the oil
-        - homogenised k_z (layers in parallel, ~130-166 W/mK) conducts heat down the winding
-          to the cooler lower oil, flattening the axial peak (with k_z = k_r, H rises to ~1.07)
+        - LV foil k_z (layers in parallel, ~166 W/mK) carries heat down the foil to the cooler
+          lower oil; the HV wire winding (k_z in series) keeps its axial peak and holds the hot-spot
         - no eddy-loss concentration at the winding ends
-      Load shape: FEM rise over oil goes as K^2 (constant h); C57.91 uses K^(2m) = K^1.6,
-      since h grows with load as oil viscosity falls. So the gap narrows above rated load.""")
+      Load shape: FEM rise over oil goes as K^2 (constant h); C57.91 uses K^(2m) = K^1.6, since h
+      grows with load as oil viscosity falls. So the FEM is below C57.91 at light load, above it at overload.""")
+
+# The FEM is a cross-check and a picture. Nothing that raises an alarm, scores
+# health or sends a notification may depend on it.
+import pathlib                                                    # noqa: E402
+import re                                                         # noqa: E402
+allowed = {"dtwin/physics/fem.py", "dtwin/twin/fem_view.py", "dtwin/api/app.py"}
+users = sorted(str(p) for p in pathlib.Path("dtwin").rglob("*.py")
+               if re.search(r"\bfem\b|fem_view", p.read_text()) and str(p) not in allowed)
+check("FEM never drives alarms: no other module imports it", not users,
+      "only fem.py, fem_view.py and the API routes" if not users else f"also used by {users}")
 
 n_ok = sum(RESULTS)
 print(f"\n{n_ok} of {len(RESULTS)} FEM checks passed")

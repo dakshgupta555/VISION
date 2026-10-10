@@ -24,12 +24,26 @@ fill:
   lv: {conductor: 0.70, paper: 0.25, oil: 0.05}     # foil or strip, thin paper layers
   hv: {conductor: 0.55, paper: 0.35, oil: 0.10}     # enamelled round wire, layer paper
 
+# Axial (z) heat path through each homogenised block. Radially the layers are
+# always in series: k_r = 1 / sum(f_i / k_i).
+#   LV parallel, k_z = sum(f_i k_i): the foil is one continuous sheet along the
+#      whole height, so heat runs along the metal. Physically correct for foil.
+#   HV series,   k_z = 1 / sum(f_i / k_i): a wire winding is a stack of turns,
+#      each wrapped in its own insulation, so an axial path crosses insulation
+#      at every turn. The parallel form (130 W/mK) let heat run down the HV
+#      winding to the cooler bottom oil and flattened its axial profile; the
+#      series form (0.38 W/mK) is the same expression as k_r.
+#      (Decision 2026-10-10, phase 3 checkpoint.)
+axial_path: {lv: parallel, hv: series}
+
 # Rated average-winding to average-oil gradient g_r, used ONCE to calibrate h.
 # 23 K is the ONAN distribution-transformer default of Alliander's open-source
 # IEC 60076-7 implementation (transformer_thermal_model, distribution.py),
 # whose other defaults (x 0.8, y 1.6, k11 1, k21 1, k22 2, tau_o 180 min,
 # tau_w 4 min) are the IEC 60076-7 ONAN distribution set. Replace with the
 # heat-run test value when it is known.
+# Consistency with our C57.91 parameters: hot-spot gradient = H x g_r =
+# 1.1 x 23 = 25.3 K, against hotspot_rise_rated_k = 25 K in nameplate.py.
 gradient_rated_k: 23.0
 gradient_source: "IEC 60076-7 ONAN distribution default g_r = 23 K, as encoded in Alliander transformer_thermal_model"
 
@@ -43,6 +57,18 @@ hotspot_factor_reference:
     H is "generally expected" to range between 1.1 and 1.3. The IEC 60076-7 clause
     8.1.4 text itself was not available to us (paywalled), so the standard's own
     value is NOT quoted here; check it against a licensed copy.
+
+# h, frozen. Calibrated once (commit dc373b3) by the rule above: at rated
+# balanced current, 30 C ambient, the FEM mean-winding to mean-oil gradient
+# equals g_r = 23 K, on the 100 kVA aluminium design with both windings'
+# k_z in parallel. It is NOT re-tuned after the HV k_z change, and never
+# toward the IEC hot-spot factor (decision 2026-10-10). Other ratings or
+# conductors have no frozen value and are calibrated by the rule.
+h_frozen:
+  value: 26.552               # W/(m2 K)
+  rating_kva: 100
+  conductor: aluminium
+  source: "calibrated once to g_r = 23 K (commit dc373b3), frozen; not re-tuned after the HV k_z change"
 
 # Oil-temperature profile along the winding: linear from bottom oil (z = 0,
 # bottom of the tallest winding) to top oil (its top). Bottom oil = top oil -

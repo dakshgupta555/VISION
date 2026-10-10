@@ -36,6 +36,22 @@ def _num(x):
     return x if math.isfinite(x) else None
 
 
+COMPARISON_NOTE = ("FEM is conduction-only, with no oil flow inside the winding ducts. It gives hot-spot location and "
+                   "per-phase distribution; C57.91 remains the value used for alarms.")
+_COMPARISON = {}
+
+
+def comparison(np_):
+    """Steady FEM vs C57.91 at 0.5 / 1.0 / 1.3 pu, 30 C ambient: one table per
+    transformer, independent of the cursor."""
+    leg = F.leg_for(np_)
+    if id(leg) not in _COMPARISON:
+        _COMPARISON[id(leg)] = {"ambient_c": 30.0, "rows": F.cross_check(np_, loads=(0.5, 1.0, 1.3), leg=leg),
+                                "note": COMPARISON_NOTE,
+                                "basis": "steady state, balanced load, both models fed the same C57.91 top oil"}
+    return _COMPARISON[id(leg)]
+
+
 def at_cursor(tw, i):
     """FEM snapshot of all three legs at sample i."""
     np_ = tw.np_
@@ -62,6 +78,7 @@ def at_cursor(tw, i):
                        "per_phase_hotspot_c": {ph: round(top + hotspot_rise_ultimate((cur[ph] or 0) / np_.rated_current_a, np_), 2)
                                                for ph in cur},
                        "note": "C57.91 at the same top oil; per phase: top oil + 25 K x K^1.6 with that phase's K"}
+        snap["comparison"] = comparison(np_)
         snap["measured_oil_c"] = _num(d.oil_temp)
         snap["boundary"] = ("Robin -k dT/dn = h (T - T_oil(z)) on every winding face; T_oil linear from bottom oil "
                             "to the C57.91 top oil predicted at this instant (measured ambient)")

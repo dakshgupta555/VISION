@@ -74,14 +74,19 @@ def config():
     return yaml.safe_load(CFG_PATH.read_text())
 
 
-def homogenised_k(fill: dict, k: dict):
-    """(k_r, k_z) of a layered block. fill: material -> volume fraction."""
+def homogenised_k(fill: dict, k: dict, axial="parallel"):
+    """(k_r, k_z) of a layered block. fill: material -> volume fraction.
+    Radially the layers are always in series. Axially: "parallel" when the
+    conductor is continuous along the height (foil), "series" when turns are
+    separated axially by their insulation (wire)."""
     tot = sum(fill.values())
     if abs(tot - 1.0) > 1e-9:
         raise ValueError(f"volume fractions sum to {tot}, not 1")
-    kz = sum(f * k[m] for m, f in fill.items())
-    kr = 1.0 / sum(f / k[m] for m, f in fill.items())
-    return kr, kz
+    par = sum(f * k[m] for m, f in fill.items())
+    ser = 1.0 / sum(f / k[m] for m, f in fill.items())
+    if axial not in ("parallel", "series"):
+        raise ValueError(f"axial path must be parallel or series, not {axial!r}")
+    return ser, (par if axial == "parallel" else ser)
 
 
 # --------------------------------------------------------------------------- #
@@ -226,8 +231,9 @@ class PhaseLeg:
         self.k = {}
         for name in ("lv", "hv"):
             d = g[name]
-            kr, kz = homogenised_k(cfg["fill"][name], k)
-            self.k[name] = {"kr": kr, "kz": kz}
+            axial = cfg.get("axial_path", {}).get(name, "parallel")
+            kr, kz = homogenised_k(cfg["fill"][name], k, axial)
+            self.k[name] = {"kr": kr, "kz": kz, "axial": axial}
             hh = d["height_m"] * s
             z0 = 0.5 * (hmax - hh)
             self.blocks[name] = Block(name, d["r_in_m"] * s, d["r_out_m"] * s, z0, z0 + hh, kr, kz, self.nr, self.nz)
@@ -298,20 +304,38 @@ class PhaseLeg:
         top = amb + top_oil_rise_ultimate(1.0, self.np_)
         return self.losses(self.np_.rated_current_a, pf=1.0), top, amb
 
+    def calibrated_h(self):
+        """The calibration rule applied to the model as it stands: the h that
+        makes the rated FEM mean-winding to mean-oil gradient equal g_r."""
+        p, top, amb = self.rated_point()
+        f = lambda h: self.gradient(self.solve(p, top, amb, h))[0] - self.g_rated
+        return brentq(f, 1.0, 1.0e4, xtol=1e-6)
+
+    def frozen(self):
+        """The h fixed in config for the design it was calibrated on, or None."""
+        fz = self.cfg.get("h_frozen")
+        if fz and fz["rating_kva"] == self.np_.rating_kva and fz["conductor"] == self.conductor:
+            return fz
+        return None
+
     @property
     def h(self):
         if self._h is None:
-            p, top, amb = self.rated_point()
-            f = lambda h: self.gradient(self.solve(p, top, amb, h))[0] - self.g_rated
-            self._h = brentq(f, 1.0, 1.0e4, xtol=1e-6)
+            fz = self.frozen()
+            self._h = float(fz["value"]) if fz else self.calibrated_h()
         return self._h
+
+    @property
+    def h_source(self):
+        fz = self.frozen()
+        return fz["source"] if fz else "calibrated by the rule on this model (no frozen value for this rating/conductor)"
 
     def calibration(self):
         p, top, amb = self.rated_point()
         res = self.solve(p, top, amb)
         g, tw, to = self.gradient(res)
         hs = self.hotspot(res)
-        return {"h_w_m2k": round(self.h, 3), "g_rated_k": self.g_rated, "g_fem_k": round(g, 4),
+        return {"h_w_m2k": round(self.h, 3), "h_source": self.h_source, "g_rated_k": self.g_rated, "g_fem_k": round(g, 4),
                 "rule": "h chosen once so that, at rated balanced current, FEM mean winding - mean oil = g_r",
                 "g_source": self.cfg["gradient_source"],
                 "rated_losses_w": {k: round(v, 1) for k, v in p.items()},
@@ -361,12 +385,12 @@ class PhaseLeg:
                 "mesh": {"elements_per_phase": self.elements, "nodes_per_phase": self.nodes,
                          "nr": self.nr, "nz": self.nz, "type": "linear triangles, structured, node lines on block edges"},
                 "materials": {"conductor": self.conductor,
-                              "k": {n: {kk: round(v, 4) for kk, v in d.items()} for n, d in self.k.items()},
+                              "k": {n: {kk: (round(v, 4) if isinstance(v, float) else v) for kk, v in d.items()} for n, d in self.k.items()},
                               "fill": self.cfg["fill"],
                               "sources": {m: self.cfg["materials"][m]["source"]
                                           for m in (self.conductor, "paper", "oil")}},
                 "calibration": {"h_w_m2k": round(self.h, 3), "g_rated_k": self.g_rated,
-                                "source": self.cfg["gradient_source"]},
+                                "source": self.cfg["gradient_source"], "h_source": self.h_source},
                 "geometry": {"scale": round(self.scale, 4), "source": self.cfg["geometry"]["source"],
                              **{n: {"r_in_m": round(b.r0, 4), "r_out_m": round(b.r1, 4),
                                     "z0_m": round(b.z0, 4), "z1_m": round(b.z1, 4)} for n, b in self.blocks.items()}},
@@ -381,7 +405,7 @@ def leg_for(np_: Nameplate, conductor=None) -> PhaseLeg:
     key = (np_.rating_kva, np_.hv_kv, np_.lv_v, np_.top_oil_rise_rated_k, np_.loss_ratio_R, conductor)
     if key not in _LEGS:
         _LEGS[key] = PhaseLeg(np_, conductor=conductor)
-        _LEGS[key].h                    # calibrate now, so solve times are solve times
+        _LEGS[key].h                    # resolve h now, so solve times are solve times
     return _LEGS[key]
 
 
