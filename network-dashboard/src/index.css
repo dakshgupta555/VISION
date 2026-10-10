@@ -106,4 +106,15 @@ body {
 select, input[type="number"] { background: var(--color-panel); color: var(--color-fg); }
 input[type="range"] { accent-color: var(--color-fg); }
 
+/* ---- Leaflet map view (network-dashboard only) ---- */
+.leaflet-container { font: 14px/1.4 var(--font-sans); background: var(--scene-bg); }
+.leaflet-container .leaflet-control-attribution, .leaflet-container .leaflet-control-scale { font-size: 14px; }
+.leaflet-control-attribution { background: color-mix(in srgb, var(--color-panel) 90%, transparent) !important; color: var(--color-dim); }
+.leaflet-tooltip { font: 14px/1.35 var(--font-sans); color: var(--color-fg); background: var(--tip-bg); border-color: var(--color-edge); }
+.map-offline .leaflet-container { background: #f7f8fa; }
+.grid-label { font: 14px/1 var(--font-sans); color: var(--color-dim); white-space: nowrap; background: transparent; border: 0; }
+.gw-icon { display: flex; align-items: center; justify-content: center; border-radius: 4px; font: 600 14px/1 var(--font-sans); }
+@keyframes ring-pulse { 0% { stroke-opacity: 0.9; } 100% { stroke-opacity: 0.15; } }
+.ring-pulse { animation: ring-pulse 1.2s ease-in-out infinite alternate; }
+
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }

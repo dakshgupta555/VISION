@@ -367,6 +367,25 @@ def compare(opt, gr):
     return " ".join(parts)
 
 
+def bundle(fleet, budget, overrides=None, link_budget=None, risks=None):
+    """What the map shows for one set of assumptions: optimised, greedy and
+    current plans, the comparison sentence, and every transformer x gateway
+    pair with its separate fields (capacity as loaded by the optimised plan)."""
+    m = Model(fleet, overrides=overrides, link_budget=link_budget)
+    risks = risks or riskmod.static_risks(fleet)
+    opt = solve(fleet, budget, risks=risks, model=m)
+    gr = greedy(fleet, budget, risks=risks, model=m)
+    cur = current(fleet, risks=risks, model=m)
+    show = opt if opt["feasible"] else cur
+    load = {g["id"]: g["used"] for g in show["gateway_load"]}
+    room = {g.id: (load.get(g.id, 0) < m.cap[g.id]) for g in m.G}
+    return {"budget": float(budget), "optimised": opt, "greedy": gr, "current": cur,
+            "why": compare(opt, gr) if opt["feasible"] else opt["message"],
+            "pairs": {a.id: m.pairs_for(a.id, room) for a in m.T},
+            "radius_m": m.radius, "cost_inr": m.install_cost, "max_nodes": m.cap,
+            "link_budget": m.use_lb, "risks": risks}
+
+
 SENS = [("node_scale", "Node cost"), ("gw_scale", "Gateway cost"), ("radius_scale", "Coverage radius")]
 
 

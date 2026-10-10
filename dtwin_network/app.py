@@ -296,22 +296,41 @@ async def plan_post(request: Request):
     lbon = b.get("link_budget")
     t0 = time.perf_counter()
     try:
-        m = planner.Model(FLEET, overrides=ov, link_budget=lbon)
+        out = planner.bundle(FLEET, B, overrides=ov, link_budget=lbon)
     except ValueError as e:
         raise HTTPException(422, str(e))
-    risks = riskmod.static_risks(FLEET)
-    opt = planner.solve(FLEET, B, risks=risks, model=m)
-    gr = planner.greedy(FLEET, B, risks=risks, model=m)
-    cur = planner.current(FLEET, risks=risks, model=m)
-    show = opt if opt["feasible"] else cur
-    load = {g["id"]: g["used"] for g in show["gateway_load"]}
-    room = {g.id: (load.get(g.id, 0) < m.cap[g.id]) for g in m.G}
-    pairs = {a.id: m.pairs_for(a.id, room) for a in m.T}
-    ms = round(1000 * (time.perf_counter() - t0), 1)
-    return {"budget": B, "optimised": opt, "greedy": gr, "current": cur,
-            "why": planner.compare(opt, gr) if opt["feasible"] else opt["message"],
-            "pairs": pairs, "radius_m": m.radius, "cost_inr": m.install_cost, "max_nodes": m.cap,
-            "link_budget": m.use_lb, "solve_ms": ms, "risks": risks}
+    out["solve_ms"] = round(1000 * (time.perf_counter() - t0), 1)
+    return out
+
+
+_DEMO = {"obj": None, "lock": threading.Lock()}
+
+
+def _demo_step(k):
+    from .demo import Demo
+    with _DEMO["lock"]:
+        if _DEMO["obj"] is None:
+            _DEMO["obj"] = Demo(FLEET)
+        return _DEMO["obj"].step(k)
+
+
+@app.get("/api/net/demo-scenario")
+async def demo_scenario(step: int = 1):
+    """The seeded six-step demo, run in-process on its own simulator and store
+    (never the live stream). Same states every run."""
+    need()
+    try:
+        return await asyncio.to_thread(_demo_step, step)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.post("/api/net/demo-scenario/reset")
+async def demo_scenario_reset():
+    need()
+    with _DEMO["lock"]:
+        _DEMO["obj"] = None
+    return await asyncio.to_thread(_demo_step, 1)
 
 
 @app.get("/api/net/sensitivity")
