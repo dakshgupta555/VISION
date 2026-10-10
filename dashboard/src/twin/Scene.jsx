@@ -78,12 +78,6 @@ function Comp({ id, comps, sel, setSel, hover, setHover, children }) {
           <div className="twin-tip"><b>{comp.name}</b><br />{comp.reason}</div>
         </Html>
       )}
-      {comp?.state === "sensor" && (
-        <Html position={(FOCUS[id] || [0, 0, 0]).map((v, k) => v + (k === 1 ? 0.14 : 0))} center
-          distanceFactor={2.4} style={{ pointerEvents: "none" }}>
-          <div className="twin-tip twin-tip-sensor">Instrument fault, transformer unaffected</div>
-        </Html>
-      )}
     </group>
   );
 }
@@ -185,13 +179,13 @@ function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem }) 
       {/* plinth, so the unit does not float */}
       <mesh position={[0, -0.04, 0]} receiveShadow>
         <boxGeometry args={[1.8, 0.08, 1.4]} />
-        <meshStandardMaterial color="#1f2a37" roughness={0.9} />
+        <meshStandardMaterial color="#8c959f" roughness={0.9} />
       </mesh>
     </group>
   );
 }
 
-const HOME = [2.5, 1.9, 2.9, 0, 0.62, 0];         // the whole unit, bushings to plinth
+const HOME = [2.75, 2.0, 3.15, 0, 0.5, 0];         // the whole unit, bushings to plinth
 
 function Rig({ controls, fly, onStats }) {
   const { gl } = useThree();
@@ -210,18 +204,35 @@ function Rig({ controls, fly, onStats }) {
   return null;
 }
 
-export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey, onTriangles, fem }) {
+// The faulted part carries a label that stays on screen: what is wrong, in words.
+function Callout({ callout }) {
+  if (!callout || !FOCUS[callout.id]) return null;
+  const [x, y, z] = FOCUS[callout.id];
+  return (
+    <Html position={[x, y + 0.42, z]} center zIndexRange={[20, 0]} style={{ pointerEvents: "none" }}>
+      <div className={`callout callout-${callout.tone}`}>{callout.text}</div>
+    </Html>
+  );
+}
+
+// Same values as --scene-bg in index.css. Read from the theme prop, not the
+// CSS variable: the page's theme attribute changes after this renders.
+const SCENE_BG = { light: "#e8ebef", dark: "#11161d" };
+
+export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey, onTriangles, fem, callout, theme }) {
+  const bg = SCENE_BG[theme] || SCENE_BG.light;
   const [hover, setHover] = useState(null);
   const controls = useRef();
   useEffect(() => { controls.current?.reset(true); }, [resetKey]);
   return (
     <Canvas shadows camera={{ position: [2.1, 1.6, 2.4], fov: 38 }} onPointerMissed={() => setSel(null)}
       gl={{ preserveDrawingBuffer: true }}>
-      <color attach="background" args={["#0e141b"]} />
+      <color attach="background" args={[bg]} />
       <hemisphereLight args={["#dfe7ef", "#1b222b", 0.8]} />
       <directionalLight position={[3, 4, 2]} intensity={1.4} castShadow />
       <directionalLight position={[-3, 2, -2]} intensity={0.4} />
       <Transformer comps={comps} scale={scale} sel={sel} setSel={setSel} hover={hover} setHover={setHover} xray={xray} fem={fem} />
+      <Callout callout={callout} />
       <CameraControls ref={controls} minDistance={1.2} maxDistance={6} />
       <Rig controls={controls} fly={flyTo} onStats={onTriangles} />
     </Canvas>

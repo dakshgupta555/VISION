@@ -130,8 +130,8 @@ export function FieldPlot({ phase, geometry, oil, color, levels, mesh, unit = "�
       <svg ref={svg} viewBox={vb.join(" ")} style={{ height, maxWidth: "100%" }} onMouseMove={move}
         onMouseLeave={() => setHover(null)} role="img" aria-label="FEM temperature field of one phase leg">
         {/* core limb side and oil */}
-        <rect x={r0 * MM} y={-12} width={(lv.r_in_m - 0.007 - r0) * MM} height={(H + 0.024) * MM} fill="#1b222b" />
-        <text x={(r0 + 0.002) * MM} y={(H / 2) * MM} fontSize={7} fill="#7d8a9a"
+        <rect x={r0 * MM} y={-12} width={(lv.r_in_m - 0.007 - r0) * MM} height={(H + 0.024) * MM} fill="var(--chart-3)" fillOpacity={0.35} />
+        <text x={(r0 + 0.002) * MM} y={(H / 2) * MM} fontSize={7} fill="var(--chart-axis)"
           transform={`rotate(-90 ${(r0 + 0.006) * MM} ${(H / 2) * MM})`}>core limb</text>
         {Object.entries(blocks).map(([n, b]) => {
           const x = b.r[0] * MM, y = (H - b.z[b.z.length - 1]) * MM;
@@ -139,10 +139,10 @@ export function FieldPlot({ phase, geometry, oil, color, levels, mesh, unit = "�
           return (
             <g key={n}>
               <image href={imgs[n]} x={x} y={y} width={w} height={h} preserveAspectRatio="none" style={{ imageRendering: "auto" }} />
-              {meshes && <path d={meshes[n]} stroke="#0b0f14" strokeOpacity={0.55} strokeWidth={0.5} fill="none" style={sw} />}
+              {meshes && <path d={meshes[n]} stroke="var(--color-fg)" strokeOpacity={0.45} strokeWidth={0.5} fill="none" style={sw} />}
               <path d={isos[n]} stroke="#e2e8f0" strokeOpacity={0.75} strokeWidth={0.8} fill="none" style={sw} />
-              <rect x={x} y={y} width={w} height={h} fill="none" stroke="#d7dee8" strokeOpacity={0.6} strokeWidth={0.8} style={sw} />
-              <text x={x + w / 2} y={(H + 0.009) * MM} fontSize={6.5} fill="#7d8a9a" textAnchor="middle">{n.toUpperCase()}</text>
+              <rect x={x} y={y} width={w} height={h} fill="none" stroke="var(--color-fg)" strokeOpacity={0.5} strokeWidth={0.8} style={sw} />
+              <text x={x + w / 2} y={(H + 0.009) * MM} fontSize={7} fill="var(--chart-axis)" textAnchor="middle">{n.toUpperCase()}</text>
             </g>
           );
         })}
@@ -154,8 +154,8 @@ export function FieldPlot({ phase, geometry, oil, color, levels, mesh, unit = "�
           </linearGradient>
         </defs>
         <rect x={(hv.r_out_m + 0.008) * MM} y={0} width={5} height={H * MM} fill={`url(#${gid})`}
-          stroke="#1f2a37" strokeWidth={0.6} style={sw} />
-        <text x={(hv.r_out_m + 0.0105) * MM} y={-3} fontSize={6} fill="#7d8a9a" textAnchor="middle">oil</text>
+          stroke="var(--color-edge)" strokeWidth={0.6} style={sw} />
+        <text x={(hv.r_out_m + 0.0105) * MM} y={-3} fontSize={7} fill="var(--chart-axis)" textAnchor="middle">oil</text>
         {marker && hs && (
           <g>
             <circle cx={hs.r_m * MM} cy={(H - hs.z_m) * MM} r={3.2} fill="none" stroke="#f8fafc" strokeWidth={1.4} style={sw} />
@@ -249,11 +249,11 @@ export function FemCompare({ res }) {
       <div className="grid grid-cols-3 gap-2">
         <div className="border border-edge rounded p-2">
           <FieldPlot phase={b} geometry={res.baseline.geometry} oil={res.baseline.oil} color={color} levels={levels} mesh={mesh} height={470}
-            label={head("Baseline", b, `top oil ${f1(res.baseline.oil.top_c)} °C · C57.91 hot-spot ${f1(res.baseline.c57.hotspot_c)} °C`)} />
+            label={head("Baseline", b, `Top oil ${f1(res.baseline.oil.top_c)} °C, C57.91 hot-spot ${f1(res.baseline.c57.hotspot_c)} °C`)} />
         </div>
         <div className="border border-accent rounded p-2">
           <FieldPlot phase={s} geometry={res.simulated.geometry} oil={res.simulated.oil} color={color} levels={levels} mesh={mesh} height={470}
-            label={head("Simulated", s, `top oil ${f1(res.simulated.oil.top_c)} °C · C57.91 hot-spot ${f1(res.simulated.c57.hotspot_c)} °C`)} />
+            label={head("Simulated", s, `Top oil ${f1(res.simulated.oil.top_c)} °C, C57.91 hot-spot ${f1(res.simulated.c57.hotspot_c)} °C`)} />
         </div>
         <div className="border border-edge rounded p-2">
           {dPhase ? (
@@ -287,8 +287,8 @@ export default function HeatMapView({ fem, onResolve, live }) {
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2 mb-2">
         <div>
           <div className="text-sm font-semibold">Winding temperature field, finite elements</div>
-          <div className="text-xs text-dim tabular-nums">{fem.timestamp?.replace("T", " ")} · steady conduction, r-z section of each
-            leg to scale · {fem.mesh.elements_per_phase.toLocaleString()} elements per phase · solved in {fem.solve_ms} ms</div>
+          <div className="text-xs text-dim tabular-nums">Steady heat conduction in a section of each phase leg, drawn to scale. {fem.mesh.elements_per_phase.toLocaleString()} elements
+            per phase, solved in {fem.solve_ms} ms.</div>
         </div>
         <ScaleBar lo={lo} hi={hi} color={color} note={`isotherms every ${step} K`} />
         <div className="flex gap-2 ml-auto">
@@ -302,16 +302,16 @@ export default function HeatMapView({ fem, onResolve, live }) {
           if (!p) return <div key={ph} className="text-dim text-sm p-4">Phase {ph}: no current reading.</div>;
           const worst = fem.worst_phase === ph;
           return (
-            <div key={ph} className={`border rounded px-2 py-2 ${worst ? "border-[#f97316]" : "border-edge"}`}>
+            <div key={ph} className={`border rounded px-2 py-2 ${worst ? "border-fg border-2" : "border-edge"}`}>
               <FieldPlot phase={p} geometry={fem.geometry} oil={fem.oil} color={color} levels={levels} mesh={mesh}
                 label={
                   <div className="text-xs tabular-nums w-full mb-1">
-                    <div className="flex justify-between"><b className="text-sm">Phase {ph}{worst ? " · hottest" : ""}</b>
-                      <span>{f1(p.current_a)} A · {Math.round(100 * p.load_pu)} %</span></div>
+                    <div className="flex justify-between"><b className="text-sm">Phase {ph}{worst ? ", hottest" : ""}</b>
+                      <span>{f1(p.current_a)} A, {Math.round(100 * p.load_pu)} % load</span></div>
                     <div>Hot-spot <b className="text-base">{f1(p.hotspot.c)} °C</b> <span className="text-dim">
                       in {p.hotspot.winding.toUpperCase()}, {Math.round(100 * p.hotspot.z_frac)} % of height</span></div>
                     <div className="text-dim">C57.91, same top oil: {f1(fem.c57.per_phase_hotspot_c?.[ph] ?? fem.c57.hotspot_c)} °C
-                      {p.H != null && <> · H {p.H.toFixed(2)}</>}</div>
+                      {p.H != null && <>, H {p.H.toFixed(2)}</>}</div>
                   </div>
                 } />
               <table className="w-full text-xs tabular-nums mt-1"><tbody>
@@ -330,7 +330,7 @@ export default function HeatMapView({ fem, onResolve, live }) {
       </div>
       {fem.comparison && (
         <div className="mt-3 border border-edge rounded px-3 py-2">
-          <div className="text-xs font-semibold text-fg">FEM against IEEE C57.91 · {fem.comparison.basis}, {fem.comparison.ambient_c} °C ambient</div>
+          <div className="text-xs font-semibold text-fg">FEM against IEEE C57.91: {fem.comparison.basis}, {fem.comparison.ambient_c} °C ambient</div>
           <table className="w-full text-xs tabular-nums mt-1">
             <thead><tr className="text-dim text-left">
               <th className="font-normal">Load</th><th className="font-normal text-right">Top oil</th>

@@ -15,7 +15,7 @@ const fmt = (v, d = 1) => {
   const x = Math.abs(v) < 0.5 * 10 ** -d ? 0 : v;      // no "-0.00"
   return x.toFixed(d);
 };
-const axis = { stroke: "#7d8a9a", fontSize: 11 };
+const axis = { stroke: "var(--chart-axis)", fontSize: 14 };
 
 function Section({ title, children }) {
   return (
@@ -33,14 +33,14 @@ function Compare({ r, k, label, unit, limit }) {
       <div className="text-xs mb-1">{label} <span className="text-dim">({unit})</span></div>
       <ResponsiveContainer width="100%" height={130}>
         <LineChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-          <CartesianGrid stroke="#1f2a37" />
+          <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
           <XAxis dataKey="h" tick={axis} unit=" h" minTickGap={30} />
           <YAxis tick={axis} domain={["auto", "auto"]} />
-          <Tooltip contentStyle={{ background: "#121821", border: "1px solid #1f2a37", fontSize: 12 }} />
-          {limit && <ReferenceLine y={limit} stroke="#7d8a9a" strokeDasharray="4 4" />}
-          <Line dataKey="base" name="Baseline" stroke="#94a3b8" dot={false} isAnimationActive={false} />
-          <Line dataKey="sim" name="Simulated" stroke="#22d3ee" dot={false} strokeWidth={2} isAnimationActive={false} />
-          <Legend wrapperStyle={{ fontSize: 11 }} />
+          <Tooltip contentStyle={{ background: "var(--tip-bg)", border: "1px solid var(--color-edge)", borderRadius: 8, fontSize: 14 }} />
+          {limit && <ReferenceLine y={limit} stroke="var(--color-alarm)" strokeDasharray="6 4" />}
+          <Line dataKey="base" name="Baseline" stroke="var(--chart-2)" strokeDasharray="5 4" dot={false} isAnimationActive={false} />
+          <Line dataKey="sim" name="Simulated" stroke="var(--chart-1)" dot={false} strokeWidth={2} isAnimationActive={false} />
+          <Legend wrapperStyle={{ fontSize: 14 }} />
         </LineChart>
       </ResponsiveContainer>
     </div>
@@ -84,8 +84,8 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
 
   return (
     <div className="twin-ui h-screen flex flex-col">
-      <header className="flex items-center gap-3 px-4 py-2 border-b-4 border-accent bg-accent/10">
-        <span className="px-2 py-0.5 rounded bg-accent text-ink text-sm font-bold">SIMULATED</span>
+      <header className="flex items-center gap-3 px-4 py-2 border-b-4 border-fg bg-panel">
+        <span className="px-3 py-1 rounded-full bg-fg text-panel text-sm font-semibold">Simulated</span>
         <span className="text-sm">Isolated copy of the observed state at <b className="tabular-nums">{r.baseline_timestamp.replace("T", " ")}</b>.
           Observed data are not changed.</span>
         <div className="ml-auto flex gap-2">
@@ -103,7 +103,7 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
                   <span className="tabular-nums">{fmt(sim[k], s.step < 0.1 ? 2 : 1)} {s.unit}</span>
                 </div>
                 <input type="range" min={s.min} max={s.max} step={s.step} value={sim[k]}
-                  className="w-full accent-cyan-400" onChange={(e) => set(k, Number(e.target.value))} />
+                  className="w-full" onChange={(e) => set(k, Number(e.target.value))} />
                 <div className="text-dim tabular-nums">baseline {fmt(base[k], s.step < 0.1 ? 2 : 1)}</div>
               </label>
             ))}
@@ -124,7 +124,7 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
         </aside>
 
         <main className="relative min-h-0 ring-4 ring-inset ring-accent">
-          <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded bg-accent text-ink text-sm font-semibold">
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap px-3 py-1 rounded-full bg-fg text-panel text-sm font-semibold">
             Simulated: predicted states after {r.horizon_h} h, not the observed transformer
           </div>
           <div className="absolute top-3 left-3 z-10 flex gap-2">
@@ -134,7 +134,8 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
           </div>
           {heat ? <FemCompare res={femR} /> : gl ? (
             <Suspense fallback={<div className="p-6 text-dim text-sm">Loading 3D…</div>}>
-              <Scene comps={comps} scale={r.components.scale} sel={sel} setSel={setSel} xray={xray} flyTo={null} resetKey={0} />
+              <Scene comps={comps} scale={r.components.scale} sel={sel} setSel={setSel} xray={xray} flyTo={null} resetKey={0}
+                theme={document.documentElement.dataset.theme} />
             </Suspense>
           ) : <Schematic comps={comps} scale={r.components.scale} sel={sel} setSel={setSel} />}
           {c && (
@@ -147,7 +148,7 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
         <aside className="border-l border-edge overflow-y-auto">
           <Section title="Baseline versus simulated, next 24 h">
             <Compare r={r} k="hotspot_c" label="Hot-spot" unit="°C" limit={110} />
-            <Compare r={r} k="top_oil_c" label="Top oil" unit="°C" limit={60} />
+            <Compare r={r} k="top_oil_c" label="Top oil" unit="°C" />
             <Compare r={r} k="aged_h" label="Insulation ageing, cumulative" unit="equivalent hours" />
           </Section>
           <Section title="Changes">

@@ -15,7 +15,7 @@ const url = arg("url", "http://localhost:5173");
 const t = arg("t", null);
 const scenario = arg("scenario", null);
 const mode = arg("mode", null);                 // "live" clicks the Live switch
-const view = arg("view", null);                 // "twin" opens the Digital twin page
+const view = arg("view", null);                 // "overview" (twin, default page) or "engineering"
 const select = arg("select", null);             // a component name to click in the list
 const slider = arg("slider", null);             // "index=value": set the n-th range input after clicks
 const out = arg("out", "../screens/dashboard.png");
@@ -39,9 +39,11 @@ if (mode === "live") {
   await page.waitForTimeout(Number(arg("wait", 4000)));
 }
 if (scenario) {
-  // the header has two selects (scenario, kVA): pick the one that offers this scenario
-  await page.locator("header select", { has: page.locator("option", { hasText: new RegExp(`^${scenario}$`) }) })
-    .first().selectOption(scenario);
+  // the data file is chosen in the settings menu
+  await page.getByRole("button", { name: "Settings" }).first().click();
+  await page.getByLabel("Data file").selectOption(scenario);
+  await page.keyboard.press("Escape");
+  await page.mouse.click(5, 5);
   await page.waitForTimeout(500);
   await page.waitForFunction(() => !document.body.innerText.includes("Loading twin"), null, { timeout: 30000 });
 }
@@ -54,8 +56,8 @@ if (t !== null) {
   }, String(t));
 }
 if (mode !== "live") await page.waitForLoadState("networkidle");   // an SSE stream never goes idle
-if (view === "twin" || view === "engineering") {
-  await page.getByRole("button", { name: view === "twin" ? "Digital twin" : "Engineering", exact: true }).first().click();
+if (view === "overview" || view === "twin" || view === "engineering") {
+  if (view === "engineering") await page.getByRole("button", { name: "Engineering", exact: true }).first().click();
   await page.waitForTimeout(Number(arg("twinwait", 5000)));
   if (select) { await page.getByRole("button", { name: select }).first().click(); await page.waitForTimeout(1500); }
   for (const b of (arg("click", "") || "").split(",").filter(Boolean)) {   // e.g. --click "X-ray,Simulate"

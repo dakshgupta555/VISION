@@ -412,6 +412,34 @@ class Twin:
             "life": self.life(i),
             "ambient_table": self.ambient_table(i),
             "gprs": self.gprs_payload(i, live, cd),
+            "display_limits": self.display_limits(),
+        }
+
+    # Health-index colour bands of the dashboard (green above 80, red below 40).
+    HEALTH_BANDS = {"warn_below": 80, "alarm_below": 40,
+                    "source": "dashboard colour rule: green > 80, amber 40-80, red < 40"}
+
+    def display_limits(self):
+        """Warning and alarm levels the dashboard draws against. Presentation
+        only: the detector and the alarms do not read these."""
+        from ..twin.components import config as comp_config
+        cfg = comp_config()
+        w = cfg["winding"]
+        oil = next(c for c in cfg["components"] if c["id"] == "oil")["thresholds"]
+        np_ = self.np_
+        v, tol = np_.voltage_nominal_ln_v, np_.voltage_tolerance_pct
+        return {
+            "hotspot_c": {"warn": w["hotspot_warn_c"], "alarm": w["hotspot_alarm_c"], "limit": np_.reference_hotspot_c,
+                          "min": 20, "max": w["hotspot_alarm_c"] + 30,
+                          "source": "config/components.yaml winding; limit = nameplate ageing reference"},
+            "load_pct": {"warn": 100 * w["load_warn_pu"], "alarm": 100 * w["load_alarm_pu"], "min": 0, "max": 150,
+                         "source": "config/components.yaml winding"},
+            "top_oil_c": {"warn": oil["top_oil_warn_c"], "alarm": oil["top_oil_alarm_c"], "min": 0,
+                          "max": oil["top_oil_alarm_c"] + 15, "source": oil["source"]},
+            "health": {**self.HEALTH_BANDS, "min": 0, "max": 100},
+            "voltage_v": {"nominal": v, "low": round(v * (1 - tol / 100), 1), "high": round(v * (1 + tol / 100), 1),
+                          "tolerance_pct": tol, "source": "nameplate nominal and tolerance"},
+            "existing_trip_oil_c": np_.trip_oil_temp_c,
         }
 
     def data_source(self):
@@ -502,6 +530,10 @@ class Twin:
         out = {"t": [x.isoformat() for x in w.index]}
         for c, nd in cols.items():
             out[c] = [None if not np.isfinite(v) else round(float(v), nd) for v in w[c].values]
+        for c in ("IR", "IY", "IB", "VR", "VY", "VB"):
+            v = self.df[c].reindex(w.index).values
+            out[c] = [None if not np.isfinite(x) else round(float(x), 1) for x in v]
+        out["rated_current_a"] = round(self.np_.rated_current_a, 1)
         out["trip_c"] = self.np_.trip_oil_temp_c
         return out
 
@@ -511,8 +543,15 @@ class Twin:
         step = max(1, len(r) // max_points)
         w = r.iloc[::step]
         lvl = np.where(w.asset_alarm, 2, np.where(w.sensor_alarm, 1, 0))
+        idx = r.index
+        episodes = [{"what": a["what"], "level": a["level"], "family": a["family"], "kind": a["kind"],
+                     "start": a["start"].isoformat(), "end": a["end"].isoformat(),
+                     "i0": int(idx.get_indexer([a["start"]], method="nearest")[0]),
+                     "i1": int(idx.get_indexer([a["end"]], method="nearest")[0])}
+                    for a in self.alerts]
         return {"t": [x.isoformat() for x in w.index], "i": list(range(0, len(r), step))[:len(w)],
-                "level": lvl.tolist(), "oil_c": [round(float(v), 1) for v in w.oil_c.values]}
+                "level": lvl.tolist(), "oil_c": [round(float(v), 1) for v in w.oil_c.values],
+                "n": len(r), "episodes": episodes}
 
 
 def steady_top_oil(k, ambient_c, cf, np_):

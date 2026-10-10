@@ -17,13 +17,13 @@ const BOXES = [
 export default function Schematic({ comps, scale, sel, setSel, forced = false }) {
   return (
     <svg viewBox="0 0 540 440" className="w-full h-full" role="img" aria-label="Transformer schematic">
-      <rect width="540" height="440" fill="#0e141b" />
+      <rect width="540" height="440" fill="var(--scene-bg)" />
       {BOXES.map(([id, x, y, w, h]) => {
         const c = comps[id];
         if (!c) return null;
         const wind = id.includes("winding");
         const fill = wind ? hotspotColor(c.hotspot_c, scale) : STATE[c.state].color;
-        const stroke = sel === id ? SELECT : c.state === "sensor" ? VIOLET : c.pulse ? STATE.red.color : "#0e141b";
+        const stroke = sel === id ? SELECT : c.state === "sensor" ? VIOLET : c.pulse ? STATE.red.color : "var(--color-fg)";
         return (
           <g key={id} onClick={() => setSel(id)} style={{ cursor: "pointer" }}>
             <title>{`${c.name}: ${c.reason}`}</title>
@@ -32,7 +32,7 @@ export default function Schematic({ comps, scale, sel, setSel, forced = false })
           </g>
         );
       })}
-      <text x="270" y="430" textAnchor="middle" fill="#7d8a9a" fontSize="11">
+      <text x="270" y="430" textAnchor="middle" fill="var(--chart-axis)" fontSize="14">
         {forced ? "2D schematic" : "2D schematic: WebGL is unavailable in this browser"}</text>
     </svg>
   );

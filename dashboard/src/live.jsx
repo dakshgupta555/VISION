@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { api, fmt, Panel } from "./ui.jsx";
+import { HELP } from "./help.js";
 
 // Live observed stream: state arrives by Server-Sent Events after every sample.
 // Replay is untouched: it keeps its own code path in App.jsx.
@@ -35,10 +36,10 @@ export function useLive(enabled) {
 
 export function ModeSwitch({ mode, setMode }) {
   return (
-    <div className="flex border border-edge rounded overflow-hidden text-xs">
+    <div className="flex border border-edge rounded-lg overflow-hidden" role="group" aria-label="Data mode">
       {["replay", "live"].map((m) => (
         <button key={m} onClick={() => setMode(m)}
-          className={`px-3 py-1 ${mode === m ? "bg-accent text-ink font-semibold" : "text-dim"}`}>
+          className={`px-4 py-1.5 text-sm ${mode === m ? "bg-fg text-panel font-semibold" : "text-dim hover:text-fg"}`}>
           {m === "replay" ? "Replay" : "Live"}
         </button>
       ))}
@@ -79,7 +80,7 @@ export function LiveBar({ status }) {
       {st.analysis_error && <span className="text-warn num" title={st.analysis_error}>analysis paused: {st.analysis_error.slice(0, 60)}</span>}
       {st.stale && <span className="text-dim">● {st.reason}</span>}
       {!st.has_data && <span className="text-dim">Start the stream: <span className="num">python -m dtwin.live --speed 600</span></span>}
-      <span className="ml-auto text-dim num">analysis {st.analysis_ms ?? "—"} ms · {st.n_samples ?? 0} samples</span>
+      <span className="ml-auto text-dim num">analysis {st.analysis_ms ?? "—"} ms, {st.n_samples ?? 0} samples</span>
     </div>
   );
 }
@@ -107,25 +108,26 @@ export function InjectPanel() {
     .catch((e) => setMsg(String(e.message || e)));
   const remove = (id) => fetch(`/api/live/inject${id ? `/${id}` : ""}`, { method: "DELETE" }).then(refresh);
   return (
-    <Panel title="Fault injection · changes the physics, the detector is not told">
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-2 items-end text-xs">
+    <Panel title="Inject a fault" help={HELP.inject}>
+      <p className="text-sm text-dim -mt-2 mb-3">Changes the simulated physics; the detector is not told.</p>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 items-end text-sm">
         <label className="md:col-span-2">Fault
-          <select className="w-full bg-ink border border-edge rounded px-1 py-1" value={form.kind}
+          <select className="w-full border border-edge rounded-lg px-2 py-1.5" value={form.kind}
             onChange={(e) => setForm({ ...FAULTS.find((f) => f.kind === e.target.value) })}>
             {FAULTS.map((f) => <option key={f.kind} value={f.kind}>{f.label}</option>)}
           </select>
         </label>
         <label>Severity {form.unit && <span className="text-dim">({form.unit})</span>}
-          <input className="w-full bg-ink border border-edge rounded px-1 py-1 num" value={form.severity}
+          <input className="w-full border border-edge rounded-lg px-2 py-1.5 num" value={form.severity}
             onChange={(e) => setForm({ ...form, severity: e.target.value })} />
         </label>
         <label>Ramp (h)
-          <input className="w-full bg-ink border border-edge rounded px-1 py-1 num" value={form.ramp}
+          <input className="w-full border border-edge rounded-lg px-2 py-1.5 num" value={form.ramp}
             onChange={(e) => setForm({ ...form, ramp: e.target.value })} />
         </label>
         {form.pick ? (
           <label>Channel
-            <select className="w-full bg-ink border border-edge rounded px-1 py-1" value={form.channel}
+            <select className="w-full border border-edge rounded-lg px-2 py-1.5" value={form.channel}
               onChange={(e) => setForm({ ...form, channel: e.target.value })}>
               {["IR", "IY", "IB"].map((c) => <option key={c}>{c}</option>)}
             </select>
@@ -133,17 +135,17 @@ export function InjectPanel() {
         ) : <span />}
       </div>
       <div className="flex gap-2 mt-2">
-        <button className="border border-accent text-accent rounded px-3 py-1 text-xs" onClick={send}>Inject</button>
-        <button className="border border-edge rounded px-3 py-1 text-xs" onClick={() => remove(null)}>Clear all</button>
+        <button className="twin-btn twin-btn-primary" onClick={send}>Inject</button>
+        <button className="twin-btn" onClick={() => remove(null)}>Clear all</button>
         {msg && <span className="text-xs text-dim self-center">{msg}</span>}
       </div>
-      <ul className="mt-2 text-xs space-y-1">
+      <ul className="mt-3 text-sm space-y-1">
         {list.length === 0 && <li className="text-dim">No faults injected.</li>}
         {list.map((f) => (
           <li key={f.id} className="flex justify-between border-t border-edge pt-1">
-            <span>{FAULTS.find((x) => x.kind === f.kind)?.label || f.kind} · {f.severity}
-              {f.channel ? ` · ${f.channel}` : ""} · ramp {f.ramp_h} h
-              <span className="text-dim"> · since record {f.injected_at_sample?.slice(5, 16).replace("T", " ")}</span></span>
+            <span>{FAULTS.find((x) => x.kind === f.kind)?.label || f.kind}, severity {f.severity}
+              {f.channel ? `, ${f.channel}` : ""}, ramp {f.ramp_h} h
+              <span className="text-dim">, since {f.injected_at_sample?.slice(5, 16).replace("T", " ")}</span></span>
             <button className="text-dim" onClick={() => remove(f.id)}>remove</button>
           </li>
         ))}

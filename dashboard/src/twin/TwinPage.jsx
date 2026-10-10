@@ -30,7 +30,7 @@ function Dock({ title, children, className = "" }) {
   );
 }
 
-function Dot({ state }) {
+export function Dot({ state }) {
   const s = STATE[state] || STATE.grey;
   return <span className="inline-block w-2.5 h-2.5 rounded-full mr-2 align-middle"
     style={{ background: s.color, boxShadow: state === "sensor" ? `0 0 0 2px ${VIOLET}` : "none" }} />;
@@ -88,7 +88,7 @@ function ComponentList({ list, sel, setSel }) {
   );
 }
 
-function Inspector({ c, simulated, rec }) {
+export function Inspector({ c, simulated, rec }) {
   if (!c) {
     return (
       <Dock title="Inspector">
@@ -115,7 +115,7 @@ function Inspector({ c, simulated, rec }) {
     <Dock title={c.name}>
       <div className="text-sm">
         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs mr-2"
-          style={{ border: `1px solid ${c.state === "sensor" ? VIOLET : st.color}`, color: c.state === "grey" ? "#b6bdb9" : c.state === "sensor" ? VIOLET : st.color }}>
+          style={{ border: `1px solid ${c.state === "sensor" ? VIOLET : st.color}`, color: c.state === "grey" ? "var(--color-dim)" : c.state === "sensor" ? VIOLET : st.color }}>
           {simulated ? "Simulated: " : ""}{st.label}
         </span>
       </div>
@@ -189,7 +189,7 @@ export function useFem(scen, cursor, version) {
   return [d, () => setNonce((k) => k + 1)];
 }
 
-function useRecommendations(scen, cursor, version) {
+export function useRecommendations(scen, cursor, version) {
   const [r, setR] = useState({});
   useEffect(() => {
     api(`${scen}/agents${scen === "live" ? "" : `?t=${cursor}`}`)
@@ -245,7 +245,7 @@ export default function TwinPage({ scen, cursor, version, header, simulateButton
 
         <main className={`relative min-h-0 ${sim ? "ring-4 ring-inset ring-accent" : ""}`}>
           {sim && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded bg-accent text-ink text-sm font-semibold">
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded-full bg-fg text-panel text-sm font-semibold">
               Simulated: hypothetical state, not the observed transformer
             </div>
           )}
@@ -269,7 +269,7 @@ export default function TwinPage({ scen, cursor, version, header, simulateButton
           )}
           {!heat && use3d && (
             <div className="absolute bottom-2 right-3 text-xs text-dim tabular-nums">
-              {tri.toLocaleString()} triangles · drag to rotate, scroll to zoom, right-drag to pan
+              {tri.toLocaleString()} triangles. Drag to rotate, scroll to zoom, right-drag to pan
             </div>
           )}
         </main>
