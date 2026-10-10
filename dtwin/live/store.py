@@ -35,6 +35,8 @@ MAX_BUFFER_DAYS = 7.0
 HISTORY_H = 48.0                   # what a prewarm supplies; below it the dashboard says so
 SESSION = uuid.uuid4().hex[:12]    # one per backend process: a change tells the source to re-prewarm
 STALE_PERIODS = 3
+DEFAULT_SPEED = 120.0             # simulated seconds per real second
+OVERLOAD_MAX_PU = 1.5             # injection cap: beyond it the thermal model is far outside C57.91's range
 
 
 def analyse(samples: pd.DataFrame, rating_kva: float, source: str, tag: str = "DT-001"):
@@ -78,7 +80,7 @@ class LiveStore:
             self.analysis_error = None
             self.faults = {}               # injection list - simulator only
             self.paused = False
-            self.speed = 600.0
+            self.speed = DEFAULT_SPEED
             self.version += 1
 
     # ---- ingest -----------------------------------------------------------------
@@ -201,6 +203,8 @@ class LiveStore:
     def inject(self, kind, severity, ramp_h=0.0, channel=None):
         if kind not in ASSET_KINDS | SENSOR_KINDS:
             raise ValueError(f"unknown fault kind {kind!r}")
+        if kind == "overload" and not 0 < float(severity) <= OVERLOAD_MAX_PU:
+            raise ValueError(f"overload severity must be above 0 and at most {OVERLOAD_MAX_PU} pu")
         if kind in SENSOR_KINDS and channel not in CHANNELS:
             raise ValueError(f"{kind} needs a channel, one of {CHANNELS}")
         if kind == "unbalance_growth":

@@ -77,7 +77,7 @@ components:
     evidence: [oil_temp]
 
   - id: monitor_box
-    name: Monitoring device (CPRI)
+    name: "Monitoring device (V, I and temperature logger, GPRS)"   # the field unit in the commissioning record CPRI shared
     group: instrumentation
     assess: monitor
     evidence: [IR, IY, IB, VR, VY, VB, oil_temp, ambient_temp]
@@ -96,6 +96,9 @@ winding:
   # per-phase hot-spot = measured top oil + C57.91 winding gradient at that phase's current
   hotspot_warn_c: 110        # ageing factor 1.0: insulation ages at its rated rate
   hotspot_alarm_c: 120       # IEC 60076-7 hot-spot limit, normal cyclic loading, distribution transformers
+  hotspot_emergency_c: 140   # IEC 60076-7 hot-spot limit, long-time emergency loading, distribution transformers.
+                             # Above it protection would trip: the dashboard says the model is extrapolating and
+                             # no further ageing or cost is counted.
   load_warn_pu: 0.90
   load_alarm_pu: 1.00        # the overload alarm
   colour_scale: {cool_c: 40, hot_c: 110}   # cool grey -> orange; red is reserved for alarms

@@ -23,9 +23,17 @@ takes a few milliseconds.
 
 ## Using the dashboard
 
-- **Scenario** (top right) picks any CSV in `data/`.
+- **Settings** (top right) picks the data file (any CSV in `data/`), the
+  nameplate rating, the theme, and downloads the PDF report.
 - **Nameplate** re-runs the twin with a different rating. Use the real one: a
   wrong rating reads as a thermal fault.
+- **Health index** is a summary of five scores, each shown under Engineering
+  details. It may not exceed the worse of the ageing and loading scores by more
+  than 10, so an extreme hot-spot drives it near 0; the page says when that
+  rule is holding it down.
+- **Above a 140 C hot-spot** the page says "Beyond IEC emergency limit —
+  protection would trip; model extrapolating" and stops counting life used and
+  its cost.
 - **Replay bar**: drag to any moment, or press Play. Every panel shows what the
   twin would have said at that instant, using only data up to it. The coloured
   strip shows where the alarms (red) and warnings (amber) are.
@@ -41,6 +49,19 @@ takes a few milliseconds.
 - **Self-test**: measures the smallest cooling degradation the twin catches for
   the selected nameplate (about 3 seconds).
 - **Download report (PDF)**: the condition report as of the replay cursor.
+
+## Live mode
+
+    python -m dtwin.live                 # 120x real time: a 15-min sample every 7.5 s
+    python -m dtwin.live --speed 600     # faster
+
+Switch the dashboard to **Live**. The stream sends 48 h of history first so the
+detectors are ready at once. **Inject a fault** changes the simulated physics
+(the analytics are never told); overload is capped at 1.5 pu. If no sample
+arrives within 5 s of when one was due, a red "Simulator disconnected" banner
+appears and the values stay at the last ones received. Pausing does not count
+as a disconnect. Stop the simulator with Ctrl-C when done
+(`pkill -f dtwin.live`; confirm with `pgrep -fl dtwin.live`).
 
 ## Load a new file
 
@@ -169,8 +190,11 @@ blocked; a phone hotspot works), and keep a screen recording as a fallback.
     python evaluate.py                   # in-sample detection scoring
     python evaluate.py --set heldout     # held-out scoring
     python check_time_term.py            # drift term vs real cooling faults
-    python check_ingest.py               # 22 mangled CSVs must load and diagnose
+    python check_ingest.py               # 31 mangled and blind files must load and diagnose
     python check_notify.py               # debounce and the replay guard, attacked
+    ./check_all.sh                       # every suite above and below, one line each
+    python check_live_faults.py          # final check: every Inject-panel fault live at 120x (~45 min)
+    cd dashboard && node scripts/names_check.mjs   # no code names on screen (needs vite + backend)
 
 ## Regenerate simulated data
 

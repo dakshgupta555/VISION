@@ -8,7 +8,9 @@ import { hotspotColor, reducedMotion, SELECT, STATE, VIOLET } from "./states.js"
 // no on-load tap changer, no motor drive. Every component is a group named by
 // its id in config/components.yaml. Units: metres. Phases R, Y, B along x.
 
-import { FOCUS, PHASE_X } from "./focus.js";
+import { FOCUS, HV_X, LV_X, PHASE_X } from "./focus.js";
+
+const METAL = "#7b848e";      // terminal studs: neutral, never a status colour
 
 function Part({ comp, selected, hovered, xray, children, geometry, position, rotation, color, opacity = 1, vertexColors = false }) {
   const mat = useRef();
@@ -86,7 +88,7 @@ function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem }) 
   const prof = (ph, w) => fem?.phases?.[ph.toUpperCase()]?.blocks?.[w]?.axial_max_c || null;
   const P = { comps, sel, setSel, hover, setHover };
   const shell = xray ? 0.12 : 1;
-  const fins = useMemo(() => Array.from({ length: 7 }, (_, k) => -0.42 + k * 0.14), []);
+  const fins = useMemo(() => Array.from({ length: 9 }, (_, k) => -0.44 + k * 0.11), []);
   return (
     <group>
       {/* tank and oil */}
@@ -118,12 +120,28 @@ function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem }) 
         </group>
       ))}
 
-      {/* radiators on both long sides */}
+      {/* radiators on both long sides: pressed-steel panels on a top and a
+          bottom header, each header piped into the tank wall, so the oil path
+          (out at the top, back at the bottom) reads at a glance */}
       <Comp id="radiators" {...P}>{(p) => (
         <group>
-          {[0.5, -0.5].map((z) => fins.map((x) => (
-            <Part key={`${z}${x}`} {...p} position={[x, 0.5, z]} geometry={<boxGeometry args={[0.025, 0.82, 0.22]} />} />
-          )))}
+          {[1, -1].map((sd) => (
+            <group key={sd}>
+              {fins.map((x) => (
+                <Part key={x} {...p} position={[x, 0.5, sd * 0.5]} geometry={<boxGeometry args={[0.018, 0.7, 0.2]} />} />
+              ))}
+              {[0.86, 0.14].map((y) => (
+                <group key={y}>
+                  <Part {...p} position={[0, y, sd * 0.43]} rotation={[0, 0, Math.PI / 2]}
+                    geometry={<cylinderGeometry args={[0.022, 0.022, 0.98, 14]} />} />
+                  {[-0.3, 0.3].map((x) => (
+                    <Part key={x} {...p} position={[x, y, sd * 0.4]} rotation={[Math.PI / 2, 0, 0]}
+                      geometry={<cylinderGeometry args={[0.028, 0.028, 0.06, 14]} />} />
+                  ))}
+                </group>
+              ))}
+            </group>
+          ))}
         </group>
       )}</Comp>
 
@@ -142,22 +160,44 @@ function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem }) 
       )}</Comp>
 
       {/* bushings: 3 HV, 4 LV (R, Y, B, N) */}
-      {["r", "y", "b"].map((ph) => (
-        <Comp key={ph} id={`hv_bushing_${ph}`} {...P}>{(p) => (
-          <group>
-            <Part {...p} position={[PHASE_X[ph] * 0.85, 1.28, 0.08]} geometry={<cylinderGeometry args={[0.03, 0.045, 0.36, 14]} />} />
-            {[0, 1, 2].map((k) => (
-              <Part key={k} {...p} position={[PHASE_X[ph] * 0.85, 1.18 + k * 0.1, 0.08]}
-                geometry={<cylinderGeometry args={[0.07, 0.07, 0.015, 18]} />} />
-            ))}
-          </group>
-        )}</Comp>
-      ))}
-      {["r", "y", "b", "n"].map((ph, k) => (
-        <Comp key={ph} id={`lv_bushing_${ph}`} {...P}>{(p) => (
-          <Part {...p} position={[-0.45 + k * 0.3, 1.18, 0.27]} geometry={<cylinderGeometry args={[0.025, 0.035, 0.18, 12]} />} />
-        )}</Comp>
-      ))}
+      {["r", "y", "b"].map((ph) => {
+        const x = HV_X[ph];
+        return (
+          <Comp key={ph} id={`hv_bushing_${ph}`} {...P}>{(p) => (
+            <group>
+              <Part {...p} position={[x, 1.115, 0.08]} geometry={<cylinderGeometry args={[0.075, 0.075, 0.02, 20]} />} />
+              <Part {...p} position={[x, 1.3, 0.08]} geometry={<cylinderGeometry args={[0.028, 0.042, 0.36, 16]} />} />
+              {[0, 1, 2, 3, 4].map((k) => (
+                <Part key={k} {...p} position={[x, 1.17 + k * 0.065, 0.08]}
+                  geometry={<cylinderGeometry args={[k % 2 ? 0.055 : 0.068, k % 2 ? 0.055 : 0.068, 0.012, 20]} />} />
+              ))}
+              <Part {...p} color={METAL} position={[x, 1.52, 0.08]} geometry={<cylinderGeometry args={[0.012, 0.012, 0.08, 10]} />} />
+            </group>
+          )}</Comp>
+        );
+      })}
+      {["r", "y", "b", "n"].map((ph) => {
+        const x = LV_X[ph];
+        return (
+          <Comp key={ph} id={`lv_bushing_${ph}`} {...P}>{(p) => (
+            <group>
+              <Part {...p} position={[x, 1.2, 0.27]} geometry={<cylinderGeometry args={[0.022, 0.034, 0.16, 14]} />} />
+              {[0, 1].map((k) => (
+                <Part key={k} {...p} position={[x, 1.16 + k * 0.06, 0.27]}
+                  geometry={<cylinderGeometry args={[0.045, 0.045, 0.01, 16]} />} />
+              ))}
+              <Part {...p} color={METAL} position={[x, 1.31, 0.27]} geometry={<cylinderGeometry args={[0.01, 0.01, 0.07, 8]} />} />
+              <Part {...p} color={METAL} position={[x, 1.35, 0.29]} geometry={<boxGeometry args={[0.03, 0.025, 0.05]} />} />
+            </group>
+          )}</Comp>
+        );
+      })}
+      <Html position={[HV_X.r - 0.17, 1.5, 0.08]} center zIndexRange={[1, 0]} style={{ pointerEvents: "none" }}>
+        <div className="scene-tag">HV</div>
+      </Html>
+      <Html position={[LV_X.r - 0.12, 1.36, 0.27]} center zIndexRange={[1, 0]} style={{ pointerEvents: "none" }}>
+        <div className="scene-tag">LV</div>
+      </Html>
 
       {/* fittings and instrumentation */}
       <Comp id="oil_pocket" {...P}>{(p) => (
@@ -187,19 +227,30 @@ function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem }) 
 
 const HOME = [2.75, 2.0, 3.15, 0, 0.5, 0];         // the whole unit, bushings to plinth
 
+// The vertical field of view is fixed, so a tall, narrow panel (a 1366 px
+// projector) sees less width: step back in proportion.
+const backOff = (aspect) => Math.max(1, 1.12 / aspect);
+
 function Rig({ controls, fly, onStats }) {
-  const { gl } = useThree();
+  const { gl, size } = useThree();
+  const ease = !reducedMotion();
+  const f = backOff(size.width / Math.max(size.height, 1));
   useEffect(() => {                                // start framed on the whole unit; Reset returns here
     if (!controls.current) return;
-    controls.current.setLookAt(...HOME, false);
+    const [px, py, pz, tx, ty, tz] = HOME;
+    controls.current.setLookAt(tx + (px - tx) * f, ty + (py - ty) * f, tz + (pz - tz) * f, tx, ty, tz, false);
     controls.current.saveState();
-  }, [controls]);
+  }, [controls, f]);
+  // Keyed on the target, not the array: a new state every few seconds in live
+  // mode must not pull the camera back while someone is orbiting.
+  const flyKey = fly ? fly.join(",") : null;
   useEffect(() => {
-    if (!fly || !controls.current) return;
-    const [x, y, z] = fly;
+    if (!flyKey || !controls.current) return;
+    const [x, y, z] = flyKey.split(",").map(Number);
     // keep the whole unit in view: aim at the fault, stay at a full-tank distance
-    controls.current.setLookAt(x + 1.9, y + 1.0, z + 2.3, x * 0.6, 0.55 + (y - 0.55) * 0.5, z * 0.6, true);
-  }, [fly, controls]);
+    const t = [x * 0.6, 0.55 + (y - 0.55) * 0.5, z * 0.6];
+    controls.current.setLookAt(t[0] + 2.3 * f, t[1] + 1.3 * f, t[2] + 2.8 * f, ...t, ease);
+  }, [flyKey, controls, ease, f]);
   useFrame(() => onStats?.(gl.info.render.triangles));
   return null;
 }
@@ -223,7 +274,7 @@ export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey
   const bg = SCENE_BG[theme] || SCENE_BG.light;
   const [hover, setHover] = useState(null);
   const controls = useRef();
-  useEffect(() => { controls.current?.reset(true); }, [resetKey]);
+  useEffect(() => { controls.current?.reset(!reducedMotion()); }, [resetKey]);
   return (
     <Canvas shadows camera={{ position: [2.1, 1.6, 2.4], fov: 38 }} onPointerMissed={() => setSel(null)}
       gl={{ preserveDrawingBuffer: true }}>
@@ -233,7 +284,8 @@ export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey
       <directionalLight position={[-3, 2, -2]} intensity={0.4} />
       <Transformer comps={comps} scale={scale} sel={sel} setSel={setSel} hover={hover} setHover={setHover} xray={xray} fem={fem} />
       <Callout callout={callout} />
-      <CameraControls ref={controls} minDistance={1.2} maxDistance={6} />
+      <CameraControls ref={controls} minDistance={1.2} maxDistance={8} smoothTime={0.6} draggingSmoothTime={0.12}
+        maxPolarAngle={Math.PI * 0.49} />
       <Rig controls={controls} fly={flyTo} onStats={onTriangles} />
     </Canvas>
   );

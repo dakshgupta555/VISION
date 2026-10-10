@@ -2,6 +2,7 @@
 // what this is, how it is computed (with the equation or standard), and what
 // normal looks like. Values that belong to this transformer are passed in from
 // the backend response, never typed here.
+import { fmt, inr } from "./ui.jsx";
 
 export const HELP = {
   whats: [
@@ -24,7 +25,8 @@ export const HELP = {
   ],
   health: (comps, b) => [
     "One 0-100 summary of five physical scores, each 0 exactly where its own alarm fires and 100 at healthy behaviour.",
-    `Weighted: ${(comps || []).map((c) => `${c.label.split(" (")[0].toLowerCase()} ${Math.round(100 * c.weight)} %`).join(", ")}.`,
+    `Weighted: ${(comps || []).map((c) => `${c.label.split(" (")[0].toLowerCase()} ${Math.round(100 * c.weight)} %`).join(", ")}. `
+      + "The index may not exceed the worse of the ageing and loading scores by more than 10, so an extreme hot-spot drives it near 0.",
     `Normal: ${b.warn_below} or more. Amber ${b.alarm_below}-${b.warn_below}, red below ${b.alarm_below}. Open Engineering details for each score.`,
   ],
   twin: [
@@ -57,9 +59,13 @@ export const HELP = {
     "Each of the five scores is computed on the same quantity, at the same instant, that its alarm fires on, and is 0 exactly where that alarm fires.",
     "100 comes from healthy behaviour (95th percentile of a healthy record) or from physics. Linear between the two; ageing on a log scale.",
   ],
-  life: [
+  life: (L) => [
     "Insulation life used, in equivalent hours at the rated hot-spot, and its value in rupees.",
-    "IEEE C57.91 ageing factor F_AA = exp(15000/383 - 15000/(hot-spot + 273)), integrated over time. Rupees = replacement cost / rated life (180 000 h) per aged hour. Normal: a rate below 1.",
+    "IEEE C57.91 ageing factor F_AA = exp(15000/383 - 15000/(hot-spot + 273)), integrated over time. "
+      + `Rupees = ${inr(L.replacement_cost_inr)} assumed replacement cost (illustrative) ÷ ${fmt(L.normal_life_hours, 0)} h `
+      + `normal life (IEEE C57.91) = ₹${fmt(L.cost_per_aged_hour_inr, 2)} per hour of life used.`,
+    `Above a ${L.emergency_hotspot_c} °C hot-spot (IEC 60076-7 long-time emergency limit) protection would trip, so those hours `
+      + "add no life used and no cost. Normal: a rate below 1.",
   ],
   alerts: [
     "Every alarm and warning the twin has raised, with repeats of the same fault grouped. Each says what happened, why the twin believes it and what to do.",

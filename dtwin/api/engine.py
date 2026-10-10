@@ -43,7 +43,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from .. import ingest
+from .. import ingest, labels
 from ..analytics.validation import validate, CHANNELS, ValidationConfig, _runs
 from ..physics import unbalance as ub
 from ..physics.ageing import ageing_factor
@@ -61,6 +61,12 @@ HEALTH = [  # key, weight, value-at-100, value-at-0 (= alarm threshold), unit, l
     ("integrity", 0.15, 100.0, 100.0 * 7 / 8, "%", "Measurement integrity (1 h)"),
     ("unbalance", 0.10, 1.45, 100.0 * _CFG.current_dev_limit, "%", "Phase deviation"),
 ]
+
+# The index cannot sit more than CAP_MARGIN above the worst of these: a
+# weighted mean alone cannot fall below 50 while the other three components
+# stay healthy, even with a 200 C hot-spot.
+SAFETY_CRITICAL = ("ageing", "loading")
+CAP_MARGIN = 10.0
 
 
 def _score(v, good, bad, log2=False):
@@ -120,7 +126,11 @@ class Twin:
         dt_h = np.r_[np.nan, np.diff(r.index.values).astype("timedelta64[s]").astype(float) / 3600]
         dt_h[0] = np.nanmedian(dt_h[1:])
         r["dt_h"] = dt_h
-        r["aged_h"] = r.faa * r.dt_h
+        # Above the emergency hot-spot limit protection would have tripped and
+        # the unit would be de-energised: those samples add no ageing and no
+        # cost, so life used never exceeds what the asset could physically see.
+        r["beyond_trip"] = r.hotspot_c > emergency_hotspot_c()
+        r["aged_h"] = np.where(r.beyond_trip, 0.0, r.faa * r.dt_h)
         n_sus = r.suspect_channels.fillna("").map(lambda x: len([c for c in x.split(",") if c]))
         self.n_present = len(CHANNELS) - len(self.absent)
         r["trusted_frac"] = 1.0 - n_sus / self.n_present
@@ -137,9 +147,9 @@ class Twin:
         r, np_ = self.rows, self.np_
         A = []
 
-        def add(t0, t1, level, family, what, why, action, kind):
+        def add(t0, t1, level, family, what, why, action, kind, channel=None):
             A.append({"start": t0, "end": t1, "level": level, "family": family,
-                      "what": what, "why": why, "action": action, "kind": kind})
+                      "what": what, "why": why, "action": action, "kind": kind, "channel": channel})
 
         for t0, t1 in self._episodes(r.thermal_status == "asset_cooling"):
             sl = r.slope.loc[t0]
@@ -151,8 +161,8 @@ class Twin:
                 "not weeks.", "cooling")
         for t0, t1 in self._episodes(r.thermal_status == "sensor_temp_offset"):
             ic, ch = r.intercept.loc[t0], r.offset_channel.loc[t0]
-            names = {"oil_temp": "oil probe", "ambient_temp": "ambient probe",
-                     "oil_temp|ambient_temp": "oil or ambient probe"}
+            names = {"oil_temp": "top-oil probe", "ambient_temp": "ambient probe",
+                     "oil_temp|ambient_temp": "top-oil or ambient probe"}
             add(t0, t1, "warn", "sensor", f"Temperature instrument offset ({names.get(ch, ch)})",
                 f"Measured rise is shifted by {ic:+.1f} K at every load level; a real thermal fault "
                 "would scale with load instead.",
@@ -168,18 +178,34 @@ class Twin:
                 f"Phase currents have moved apart (peak {u:.1f}% unbalance) and the voltages "
                 "confirm a real redistribution of load, not a CT error.",
                 "Rebalance single-phase loads across R/Y/B at the next feeder visit.", "unbalance")
+        lo_t, hi_t = _CFG.temp_range_c
+        lo_v, hi_v = (np_.voltage_nominal_ln_v * x for x in _CFG.voltage_range_pu)
+        plausible = {**{c: f"{lo_t:.0f} to {hi_t:.0f} °C" for c in ("oil_temp", "ambient_temp")},
+                     **{c: f"{lo_v:.0f} to {hi_v:.0f} V" for c in ("VR", "VY", "VB")}}
         for ch in CHANNELS:
-            for state, lvl, verb, act in (
-                    ("dead", "warn", "reading missing or invalid",
-                     "Check wiring and the logger input."),
-                    ("stuck", "warn", "frozen at a constant value",
+            name, raw = labels.READING[ch], self.df[ch]
+            dead = r[f"ch_{ch}"].eq("dead")
+            for mask, what, why, act in (
+                    (dead & raw.isna(), f"{name} reading missing",
+                     "The logger sent no value for this channel. Cross-checked against the other channels; "
+                     "the twin carries on without it.", "Check wiring and the logger input."),
+                    (dead & raw.notna(),
+                     f"{name} reading outside the sensor's plausible range" if ch in plausible
+                     else f"{name} reads zero or negative while the other phases carry load",
+                     (f"A working sensor reports {plausible[ch]}; this reading is outside that, so it is not "
+                      "used. A failed probe is the usual cause, but check the load as well." if ch in plausible
+                      else "A live phase cannot carry zero or negative current while the others are loaded."),
+                     "Check the sensor and its wiring; confirm the value with a hand-held instrument."),
+                    (r[f"ch_{ch}"].eq("stuck"), f"{name} reading frozen",
+                     "Cross-checked against the other channels; the transformer state is unaffected.",
                      "Reset the logger channel; values during this period were replaced."),
-                    ("suspect", "warn", "disagrees with the other phases",
+                    (r[f"ch_{ch}"].eq("suspect"), f"{name} disagrees with the other phases",
+                     "Cross-checked against the other channels; the transformer state is unaffected.",
                      "Check the CT/VT ratio and connections on this phase.")):
-                for t0, t1 in self._episodes(r[f"ch_{ch}"] == state):
-                    add(t0, t1, lvl, "sensor", f"{ch} {verb}",
-                        "Cross-checked against the other channels; the transformer state is "
-                        "unaffected.", act, f"channel_{state}")
+                kind = "channel_stuck" if "frozen" in what else "channel_suspect" if "disagrees" in what \
+                    else "channel_dead"
+                for t0, t1 in self._episodes(mask):
+                    add(t0, t1, "warn", "sensor", what, why, act, kind, channel=ch)
         for t0, t1 in self._episodes(r.overload):
             k = r.K_oil.loc[t0:t1].max()
             add(t0, t1, "alarm", "asset", "Overload",
@@ -230,7 +256,15 @@ class Twin:
             if sc is not None:
                 tot += wt * sc
                 wsum += wt
-        return {"index": _f(tot / wsum, 0) if wsum else None, "components": comps}
+        mean = tot / wsum if wsum else None
+        crit = [c for c in comps if c["key"] in SAFETY_CRITICAL and c["score"] is not None]
+        worst = min(crit, key=lambda c: c["score"]) if crit else None
+        cap = worst["score"] + CAP_MARGIN if worst else None
+        capped = mean is not None and cap is not None and cap < mean
+        return {"index": _f(min(mean, cap) if capped else mean, 0) if mean is not None else None,
+                "weighted_mean": _f(mean, 0), "capped_by": worst["key"] if capped else None,
+                "cap_rule": f"index <= worst of {', '.join(SAFETY_CRITICAL)} + {CAP_MARGIN:g}",
+                "components": comps}
 
     def countdown(self, i):
         return self.whatif(i)
@@ -279,14 +313,18 @@ class Twin:
         oil_p, hs_p = model.project(state, ko, kw, amb, 60 * horizon_h, dt_minutes=10.0)
         hs_ss = steady_hs(ko)
         faa_ss = float(ageing_factor(hs_ss, np_))
+        beyond = bool(hs_ss > emergency_hotspot_c())
         return {"load_pu": _f(ko, 3), "ambient_c": _f(amb, 1), "cooling_factor_used": _f(cf, 3),
                 "cooling_factor_estimated": _f(cf_est, 3),
                 "hotspot": project(np_.reference_hotspot_c, "hotspot", hs0, steady_hs),
                 "fixed": project(np_.trip_oil_temp_c, "top_oil", oil0, steady_oil),
                 "steady": {"top_oil_c": _f(steady_oil(ko), 1), "hotspot_c": _f(hs_ss, 1),
                            "faa": _f(faa_ss, 3),
-                           "aged_hours_per_day": _f(24 * faa_ss, 2),
-                           "life_cost_inr_per_day": _f(24 * faa_ss * np_.cost_per_hour_of_life_inr, 0)},
+                           "beyond_emergency": beyond,
+                           "aged_hours_per_day": None if beyond else _f(24 * faa_ss, 2),
+                           "life_cost_inr_per_day": None if beyond else
+                           _f(24 * faa_ss * np_.cost_per_hour_of_life_inr, 0)},
+                "emergency_hotspot_c": emergency_hotspot_c(),
                 "projection": {"minutes": [10 * (k + 1) for k in range(len(oil_p))],
                                "oil_c": [round(float(x), 1) for x in oil_p],
                                "hotspot_c": [round(float(x), 1) for x in hs_p]}}
@@ -301,10 +339,12 @@ class Twin:
             w = r.loc[ts - pd.Timedelta(hours=h):ts] if h else r.iloc[:i + 1]
             aged, real = float(w.aged_h.sum()), float(w.dt_h.sum())
             return {"aged_h": _f(aged, 2), "real_h": _f(real, 1), "inr": _f(aged * cost, 0),
-                    "rate_pu": _f(aged / real, 3) if real else None}
+                    "rate_pu": _f(aged / real, 3) if real else None,
+                    "beyond_trip_h": _f(float(w.dt_h[w.beyond_trip].sum()), 1)}
 
         return {"cost_per_aged_hour_inr": _f(cost, 2), "replacement_cost_inr": np_.replacement_cost_inr,
                 "normal_life_hours": np_.normal_life_hours,
+                "emergency_hotspot_c": emergency_hotspot_c(),
                 "last_1h": win(1), "last_24h": win(24), "since_start": win(None)}
 
     def ambient_table(self, i):
@@ -395,9 +435,13 @@ class Twin:
                 "equivalent_hours": _f(day.aged_h.sum(), 2),
                 "real_hours": _f(day.dt_h.sum(), 1),
                 "life_cost_inr": _f(day.aged_h.sum() * np_.cost_per_hour_of_life_inr, 0),
+                "beyond_trip_h": _f(float(day.dt_h[day.beyond_trip].sum()), 1),
                 "last_hour_equivalent_hours": _f(r.loc[ts - pd.Timedelta(hours=1):ts].aged_h.sum(), 2),
             },
             "health": self.health(i),
+            "physical_limit": {"emergency_hotspot_c": emergency_hotspot_c(),
+                               "beyond": bool(row.beyond_trip),
+                               "message": BEYOND_LIMIT if row.beyond_trip else None},
             "countdown": cd,
             "alerts_live": [{**_alert_json(a), "headline": self._headline(a, row)}
                             for a in sorted(live, key=_urgency)],
@@ -495,16 +539,25 @@ class Twin:
         return " · ".join(parts)
 
     def _recommend(self, live, cd):
+        """One action per problem. The hot-spot projection carries the load
+        instruction, so an overload alert does not add a second "shed load"
+        line: the two merge into the projection's one."""
         out = []
+        h = cd["hotspot"]
+        shed = h["already_above"] or h["minutes"] is not None
         for a in live:
+            if a["kind"] == "overload" and shed:
+                continue
             out.append({"priority": 1 if a["level"] == "alarm" else 2, "family": a["family"],
                         "text": a["action"], "because": a["what"]})
-        h = cd["hotspot"]
-        if h["already_above"] or h["minutes"] is not None:
-            when = "now" if h["already_above"] else f"in {h['minutes']:.0f} min"
-            out.append({"priority": 1, "family": "asset",
-                        "text": f"Shed {h['shed_pct']:.0f}% load: hot-spot reaches "
-                                f"{h['limit_c']:.0f} °C {when} and settles at {h['settles_at_c']:.0f} °C.",
+        if shed:
+            lim = f"{h['limit_c']:.0f}\u00a0°C"            # no line break inside "110 °C"
+            text = (f"Shed {h['shed_pct']:.0f}% of load to bring the hot-spot back under {lim}."
+                    if h["already_above"] else
+                    f"Shed {h['shed_pct']:.0f}% of load to keep the hot-spot under {lim}; "
+                    f"at this load it gets there in {h['minutes']:.0f} min.")
+            out.append({"priority": 1, "family": "asset", "text": text,
+                        "detail": f"If nothing changes it settles at {h['settles_at_c']:.0f}\u00a0°C.",
                         "because": "Insulation would age faster than its rated life"})
         f = cd["fixed"]
         if f["minutes"] is not None:
@@ -552,6 +605,16 @@ class Twin:
         return {"t": [x.isoformat() for x in w.index], "i": list(range(0, len(r), step))[:len(w)],
                 "level": lvl.tolist(), "oil_c": [round(float(v), 1) for v in w.oil_c.values],
                 "n": len(r), "episodes": episodes}
+
+
+def emergency_hotspot_c():
+    """IEC 60076-7 long-time emergency hot-spot limit for distribution
+    transformers (config/components.yaml winding.hotspot_emergency_c)."""
+    from ..twin.components import config as comp_config
+    return float(comp_config()["winding"]["hotspot_emergency_c"])
+
+
+BEYOND_LIMIT = "Beyond IEC emergency limit — protection would trip; model extrapolating"
 
 
 def steady_top_oil(k, ambient_c, cf, np_):

@@ -23,6 +23,7 @@ from pathlib import Path
 import numpy as np
 import yaml
 
+from ..labels import channel as chname, state as stname
 from ..physics.ageing import ageing_factor
 from ..physics.thermal import hotspot_rise_ultimate
 
@@ -121,9 +122,9 @@ def a_winding(c, ev):
     ch = f"I{ph}"
     i_a = ev["currents"].get(ph)
     if ev["channels"].get(ch) in BAD or i_a is None:
-        return _rec("grey", f"{ch} current channel is {ev['channels'].get(ch)}: this phase cannot be assessed.",
-                    observed=[_obs(f"{ch} channel", ev["channels"].get(ch))],
-                    missing=[f"a trusted {ch} reading"], verification=[f"Clamp-meter the {ph}-phase current."])
+        return _rec("grey", f"{chname(ch)}: {stname(ev['channels'].get(ch))}. This phase cannot be assessed.",
+                    observed=[_obs(chname(ch), stname(ev["channels"].get(ch)))],
+                    missing=[f"a trusted {chname(ch).lower()} reading"], verification=[f"Clamp-meter the {ph}-phase current."])
     probe_ok = ev["oil_c"] is not None and ev["channels"].get("oil_temp") not in BAD \
         and "oil_temp" not in ev["suspect"]
     oil = ev["oil_c"] if probe_ok else ev["pred_oil_c"]
@@ -351,11 +352,11 @@ def a_oil_probe(c, ev):
     off = ev["thermal_status"] == "sensor_temp_offset" and "oil_temp" in ev["offset_channel"]
     if chs in BAD or off:
         both = ev["offset_channel"] == "oil_temp|ambient_temp"
-        why = (f"probe reading is {chs}" if chs in BAD else
+        why = (f"top-oil probe: {stname(chs)}" if chs in BAD else
                f"every reading is shifted by {ev['intercept']:+.1f} K at every load"
                + (": oil or ambient probe, they are thermally identical" if both else ""))
         return _rec("sensor", f"Instrument fault, transformer unaffected: {why}.",
-                    observed=[_obs("Oil probe channel", chs), _obs("Intercept", ev["intercept"], "K", 2),
+                    observed=[_obs("Top-oil probe", stname(chs)), _obs("Intercept", ev["intercept"], "K", 2),
                               _obs("Slope", ev["slope"], "", 3)],
                     expected=[_obs("Intercept, healthy", "within +/- 2 K")],
                     rule={"equation": "measured rise = a x predicted rise + b",
@@ -368,7 +369,7 @@ def a_oil_probe(c, ev):
                                   "Do not dispatch a crew for a transformer fault."],
                     limits=["An oil-high and an ambient-low offset look identical to the thermal fit."])
     if ev["oil_c"] is None:
-        return _rec("grey", "No oil temperature reading.", missing=["oil_temp channel"])
+        return _rec("grey", "No top-oil temperature reading.", missing=["top-oil temperature reading"])
     return _rec("green", "Probe agrees with the thermal twin.",
                 observed=[_obs("Measured", ev["oil_c"], "°C"), _obs("Twin", ev["pred_oil_c"], "°C")],
                 rule={"equation": "|intercept| <= 2 K", "substituted": f"b = {ev['intercept']:+.2f} K" if ev["intercept"] is not None else "",
@@ -378,10 +379,10 @@ def a_oil_probe(c, ev):
 def a_monitor(c, ev):
     bad = {ch: s for ch, s in ev["channels"].items() if s in ("dead", "stuck", "suspect")}
     off = ev["thermal_status"] == "sensor_temp_offset"
-    obs = [_obs(ch, s) for ch, s in ev["channels"].items()]
+    obs = [_obs(chname(ch), stname(s)) for ch, s in ev["channels"].items()]
     if bad or off:
-        what = ", ".join(f"{ch} {s}" for ch, s in bad.items()) + \
-            (("; " if bad else "") + f"temperature offset ({ev['offset_channel'].replace('|', ' or ')})" if off else "")
+        what = ", ".join(f"{chname(ch)}: {stname(s)}" for ch, s in bad.items()) + \
+            (("; " if bad else "") + f"temperature offset ({chname(ev['offset_channel']).lower()})" if off else "")
         return _rec("sensor", f"Instrument fault, transformer unaffected: {what}.", observed=obs,
                     verification=["Check wiring and the logger input for the named channel.",
                                   "Do not dispatch a crew for a transformer fault."],

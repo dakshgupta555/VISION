@@ -5,7 +5,14 @@
 #
 # The twin is advisory: it never operates equipment and never authorises a
 # transformer to remain in service.
+#
+# Every condition cites a `source`. Every material carries supplier, part number
+# and price fields that read "to be filled from approved vendor data" until a utility
+# fills them from its approved vendor list. No supplier, price or phone number
+# in this file was invented. Standards are cited by number only; check the
+# clause against the edition in force before relying on it.
 
+common_safety_source: "CEA (Measures relating to Safety and Electric Supply) Regulations and IS 5216 (safety procedures and practices in electrical work). Verify current editions."
 common_safety: &safety
   - Work only under a permit-to-work issued by the authorised person.
   - Isolate HV and LV, prove dead, and apply earths at the point of work before touching any live-part enclosure.
@@ -15,6 +22,7 @@ common_safety: &safety
 conditions:
   cooling_degraded:
     title: Cooling path degraded
+    source: "IS 10028 (Part 3), code of practice for maintenance of transformers; IEC 60076-7 for the loading consequence. Verify current editions."
     inspection:
       - Inspect the radiator fins for dust, debris, bird nests or paint build-up.
       - Check that every radiator isolating valve is fully open.
@@ -27,11 +35,12 @@ conditions:
     qualification: [Substation maintenance technician; oil handling requires a trained person.]
     safety: *safety
     materials:
-      - {item: Fin cleaning, specification: "Clean water or dry compressed air at low pressure", note: "no specification beyond care for the gaskets"}
+      - {item: Fin cleaning, specification: "Clean water or dry compressed air at low pressure", note: "no specification beyond care for the gaskets", source: "no standard: the team's general maintenance practice; to be checked against the utility's approved procedure", supplier: "to be filled from approved vendor data", part_no: "to be filled from approved vendor data", price_inr: "to be filled from approved vendor data"}
     notes: "Confirm the improvement afterwards on the twin: the rise-fit slope should return towards 1.0 within about a day."
 
   oil_level_check:
     title: Oil level to be checked (possible leak)
+    source: "IS 10028 (Part 3) for inspection; IS 335 for new oil; IS 1866 / IEC 60422 for testing oil in service. Verify current editions."
     indication_vs_source: >-
       The twin has an INDICATION only (reduced cooling, which low oil can cause). A leak is CONFIRMED only by a low
       gauge reading together with a located source: wipe the suspect joints clean, re-inspect after a load cycle,
@@ -45,11 +54,12 @@ conditions:
     qualification: [Substation maintenance technician; weld repairs by the OEM or an approved workshop.]
     safety: *safety
     materials:
-      - {item: Insulating oil, specification: "New mineral insulating oil to IS 335 (verify current edition); breakdown voltage tested before filling", note: "do not mix with oil of unknown type"}
-      - {item: Gaskets, specification: "OEM part for the specific joint (nitrile or cork-nitrile as originally fitted)", note: "sizes are joint-specific; take them from the OEM drawing"}
+      - {item: Insulating oil, specification: "New mineral insulating oil to IS 335 (verify current edition); breakdown voltage tested before filling", note: "do not mix with oil of unknown type", source: "IS 335 (new mineral insulating oil)", supplier: "to be filled from approved vendor data", part_no: "to be filled from approved vendor data", price_inr: "to be filled from approved vendor data"}
+      - {item: Gaskets, specification: "OEM part for the specific joint (nitrile or cork-nitrile as originally fitted)", note: "sizes are joint-specific; take them from the OEM drawing", source: "OEM drawing or manual for this unit", supplier: "to be filled from approved vendor data", part_no: "to be filled from approved vendor data", price_inr: "to be filled from approved vendor data"}
 
   winding_overload:
     title: Windings overloaded
+    source: "IEC 60076-7 and IEEE C57.91 (loading guides): the safe-load figure is the twin's C57.91 calculation."
     inspection:
       - Confirm the load with a clamp meter on each LV phase.
       - Review the feeder load and any switching that transferred load.
@@ -63,6 +73,7 @@ conditions:
 
   phase_unbalance:
     title: Phase load unbalance
+    source: "no standard: the team's general maintenance practice; to be checked against the utility's approved procedure"
     inspection:
       - Survey single-phase loads per phase on the LV feeder.
       - Check the LV terminals and lugs of the most loaded phase.
@@ -74,6 +85,7 @@ conditions:
 
   connection_resistance:
     title: High-resistance LV connection suspected
+    source: "no standard: the team's general maintenance practice; to be checked against the utility's approved procedure; torque values only from the OEM manual"
     inspection:
       - Thermal image of the LV bushing, lug and cable termination of the flagged phase under load.
       - At an outage, measure the joint resistance with a micro-ohmmeter and compare phases.
@@ -83,11 +95,12 @@ conditions:
     qualification: [Substation maintenance technician.]
     safety: *safety
     materials:
-      - {item: Cable lug, specification: "Matching the conductor's material and cross-section; bimetallic where copper meets aluminium", note: "take the size from the cable, never from a neighbouring phase by assumption"}
-      - {item: Contact compound, specification: "Joint compound suitable for the conductor material", note: ""}
+      - {item: Cable lug, specification: "Matching the conductor's material and cross-section; bimetallic where copper meets aluminium", note: "take the size from the cable, never from a neighbouring phase by assumption", source: "no standard: the team's general maintenance practice; to be checked against the utility's approved procedure", supplier: "to be filled from approved vendor data", part_no: "to be filled from approved vendor data", price_inr: "to be filled from approved vendor data"}
+      - {item: Contact compound, specification: "Joint compound suitable for the conductor material", note: "", source: "no standard: the team's general maintenance practice; to be checked against the utility's approved procedure", supplier: "to be filled from approved vendor data", part_no: "to be filled from approved vendor data", price_inr: "to be filled from approved vendor data"}
 
   winding_repair:
     title: Winding repair (only after tests confirm a winding fault)
+    source: "IS 2026 (Part 1) / IEC 60076-1 for the routine tests named; IS 10593 / IEC 60599 for interpreting DGA. Verify current editions."
     inspection:
       - Winding resistance, turns ratio and insulation resistance tests; DGA of the oil.
     corrective:
@@ -95,10 +108,11 @@ conditions:
     qualification: [OEM or approved transformer repair workshop.]
     safety: *safety
     materials:
-      - {item: Winding conductor, specification: "Same material, grade, cross-section and insulation class as the original, from the OEM winding data sheet", note: "conductor grades and sizes are NOT interchangeable; substitution changes losses, impedance and short-circuit strength"}
+      - {item: Winding conductor, specification: "Same material, grade, cross-section and insulation class as the original, from the OEM winding data sheet", note: "conductor grades and sizes are NOT interchangeable; substitution changes losses, impedance and short-circuit strength", source: "OEM drawing or manual for this unit", supplier: "to be filled from approved vendor data", part_no: "to be filled from approved vendor data", price_inr: "to be filled from approved vendor data"}
 
   oil_temperature_high:
     title: Top-oil temperature high
+    source: "IEC 60076-7 (top-oil limits) and IEEE C57.91 (projection); the 105 C limit is in config/components.yaml."
     inspection:
       - Confirm with a reference thermometer in the oil pocket.
       - Check load and ambient against the twin's projection.
@@ -110,6 +124,7 @@ conditions:
 
   probe_offset:
     title: Temperature instrument offset
+    source: "no standard: the team's general maintenance practice; to be checked against the utility's approved procedure; the diagnosis is the twin's rise-fit (docs/methodology.md)"
     inspection:
       - Compare the oil probe with a reference thermometer in the pocket, and the ambient probe with a reference in the shade.
     corrective:
@@ -119,10 +134,11 @@ conditions:
     safety:
       - "The oil pocket is on the energised tank cover: work on it only under a permit with the unit isolated, or with an approved live-working procedure for the pocket."
     materials:
-      - {item: Temperature probe, specification: "Same sensor type, range and connection as the installed probe (from the monitoring-device manual)", note: ""}
+      - {item: Temperature probe, specification: "Same sensor type, range and connection as the installed probe (from the monitoring-device manual)", note: "", source: "monitoring-device manual", supplier: "to be filled from approved vendor data", part_no: "to be filled from approved vendor data", price_inr: "to be filled from approved vendor data"}
 
   channel_fault:
     title: Monitoring channel fault
+    source: "no standard: the team's general maintenance practice; to be checked against the utility's approved procedure; CT secondary handling as in IS 5216 (safety in electrical work). Verify current edition."
     inspection:
       - Check the wiring and terminal of the named channel at the monitoring device; check the CT or VT secondary connection.
     corrective:
@@ -133,10 +149,11 @@ conditions:
       - Never open-circuit a CT secondary under load; short it first with the approved shorting link.
       - "VT secondary wiring is live: isolate it at its fuses before work."
     materials:
-      - {item: CT or VT, specification: "Same ratio, burden and accuracy class as the installed unit", note: ""}
+      - {item: CT or VT, specification: "Same ratio, burden and accuracy class as the installed unit", note: "", source: "installed unit's rating plate", supplier: "to be filled from approved vendor data", part_no: "to be filled from approved vendor data", price_inr: "to be filled from approved vendor data"}
 
   model_mismatch:
     title: Thermal model mismatch
+    source: "the twin's own configuration (docs/user-guide.md, swapping in a file)."
     inspection:
       - Check the nameplate rating entered for this unit; check the probe sits in a top-oil pocket.
     corrective:
@@ -147,6 +164,7 @@ conditions:
 
   core_test:
     title: Core condition from the open-circuit test
+    source: "IS 2026 (Part 1) / IEC 60076-1, no-load loss and current measurement. Verify current editions."
     inspection:
       - Repeat the open-circuit test at rated voltage; compare with the factory test.
     corrective:

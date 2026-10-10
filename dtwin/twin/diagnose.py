@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 
 from . import components as TC
+from ..labels import channel as chname, state as stname
 
 GROUPS = {
     "Windings": {"ids": ["lv_winding_r", "lv_winding_y", "lv_winding_b", "hv_winding_r", "hv_winding_y", "hv_winding_b"],
@@ -175,11 +176,11 @@ def findings(tw, i, comps, ev):
 
     bad = {c: s for c, s in ev["channels"].items() if s in ("dead", "stuck", "suspect")}
     for ch, st in bad.items():
-        out.append({"condition": f"{ch} channel {st}", "component_id": "monitor_box", "state": "sensor",
-                    "evidence": [f"{ch} {st}"], "ranked": _ranked([
+        out.append({"condition": f"{chname(ch)} channel: {stname(st)}", "component_id": "monitor_box", "state": "sensor",
+                    "evidence": [f"{chname(ch)}: {stname(st)}"], "ranked": _ranked([
                         _h("Logger input or wiring fault", "more likely" if st in ("dead", "stuck") else "possible",
-                           [f"{st} reading"], [], ""),
-                        _h("Sensor (CT, VT or probe) failure", "possible", [f"{st} reading"], [], "swap test needed"),
+                           [f"reading: {stname(st)}"], [], ""),
+                        _h("Sensor (CT, VT or probe) failure", "possible", [f"reading: {stname(st)}"], [], "swap test needed"),
                         _h("Transformer fault", "excluded", [], ["the other channels and the thermal twin agree"], ""),
                     ])})
 

@@ -11,13 +11,17 @@ export function useLive(enabled) {
   const [status, setStatus] = useState(null);
   const [err, setErr] = useState(null);
   const lastSeries = useRef(0);
+  const got = useRef(0);                               // wall clock when status last arrived
+  const [now, setNow] = useState(Date.now());
   useEffect(() => {
     if (!enabled) return undefined;
     let es;
     api("live/status").then(setStatus).catch((e) => setErr(String(e)));
     es = new EventSource("/api/live/stream");
+    const tick = setInterval(() => setNow(Date.now()), 1000);
     es.addEventListener("state", (ev) => {
       const st = JSON.parse(ev.data);
+      got.current = Date.now();
       setS(st);
       setStatus(st.live);
       setErr(null);
@@ -27,11 +31,25 @@ export function useLive(enabled) {
         api("live/series").then(setSeries).catch(() => {});
       }
     });
-    es.addEventListener("status", (ev) => setStatus(JSON.parse(ev.data)));
+    es.addEventListener("status", (ev) => { got.current = Date.now(); setStatus(JSON.parse(ev.data)); });
     es.onerror = () => setErr("live stream interrupted - retrying");
-    return () => es && es.close();
+    return () => { clearInterval(tick); if (es) es.close(); };
   }, [enabled]);
-  return { s, series, status, err };
+  return { s, series, status, err, link: linkState(status, got.current, now, err) };
+}
+
+// The sample age the server last reported, aged on the client since it
+// arrived (so it keeps growing if the backend itself goes away). A source is
+// disconnected when its next sample is more than DISCONNECT_S late: at 120x a
+// 15-min sample arrives every 7.5 s, so "age > 5 s" alone would fire between
+// every pair of healthy samples.
+export const DISCONNECT_S = 5;
+export function linkState(st, got, now, err) {
+  if (!st?.has_data || st.sample_age_s == null) return { age: null, disconnected: false };
+  const age = st.sample_age_s + Math.max(0, (now - got) / 1000);
+  const late = age - (st.period_s || 0);
+  const who = st.source === "sensor" ? "Sensor feed" : "Simulator";
+  return { age, late, disconnected: !st.paused && late > DISCONNECT_S, who, backendDown: Boolean(err) };
 }
 
 export function ModeSwitch({ mode, setMode }) {
@@ -63,9 +81,9 @@ export function LiveBar({ status }) {
         <span className="text-dim">prewarm history to {st.prewarm_until.slice(5, 16).replace("T", " ")}</span>
       )}
       <label className="flex items-center gap-1 text-dim">speed
-        <select className="bg-ink border border-edge rounded px-1 py-0.5 num text-fg" value={st.speed || 600}
+        <select className="bg-ink border border-edge rounded px-1 py-0.5 num text-fg" value={st.speed || 120}
           onChange={(e) => control({ speed: Number(e.target.value) })}>
-          {[60, 300, 600, 1800, 3600].map((x) => <option key={x} value={x}>{x}x</option>)}
+          {SPEEDS.map((x) => <option key={x} value={x}>{x}x</option>)}
         </select>
       </label>
       <button className="border border-edge rounded px-2 py-1" onClick={() => control({ paused: !st.paused })}>
@@ -79,16 +97,19 @@ export function LiveBar({ status }) {
       )}
       {st.analysis_error && <span className="text-warn num" title={st.analysis_error}>analysis paused: {st.analysis_error.slice(0, 60)}</span>}
       {st.stale && <span className="text-dim">● {st.reason}</span>}
-      {!st.has_data && <span className="text-dim">Start the stream: <span className="num">python -m dtwin.live --speed 600</span></span>}
+      {!st.has_data && <span className="text-dim">Start the stream: <span className="num">python -m dtwin.live</span></span>}
       <span className="ml-auto text-dim num">analysis {st.analysis_ms ?? "—"} ms, {st.n_samples ?? 0} samples</span>
     </div>
   );
 }
 
+export const SPEEDS = [60, 120, 300, 600, 1800, 3600];
+const OVERLOAD_MAX_PU = 1.5;                  // same cap as the backend (dtwin/live/store.py)
+
 const FAULTS = [
   { kind: "cooling_degradation", label: "Cooling degradation", severity: 0.3, unit: "x rise", ramp: 24 },
   { kind: "oil_loss", label: "Oil loss", severity: 0.3, unit: "fraction", ramp: 72 },
-  { kind: "overload", label: "Overload", severity: 1.25, unit: "pu load", ramp: 1 },
+  { kind: "overload", label: "Overload", severity: 1.25, unit: `pu load, at most ${OVERLOAD_MAX_PU}`, ramp: 1, max: OVERLOAD_MAX_PU },
   { kind: "unbalance_growth", label: "Phase unbalance", severity: 0.12, unit: "fraction", ramp: 24 },
   { kind: "sensor_drift", label: "Oil probe drift", severity: 5, unit: "K", ramp: 24, channel: "oil_temp" },
   { kind: "sensor_stuck", label: "Stuck current channel", severity: 1, unit: "", ramp: 0, channel: "IY", pick: true },
@@ -101,11 +122,12 @@ export function InjectPanel() {
   const [msg, setMsg] = useState(null);
   const refresh = () => api("live/inject").then((d) => setList(d.faults)).catch(() => {});
   useEffect(() => { refresh(); const id = setInterval(refresh, 3000); return () => clearInterval(id); }, []);
-  const send = () => fetch("/api/live/inject", {
+  const send = () => (form.max && !(Number(form.severity) > 0 && Number(form.severity) <= form.max)
+    ? Promise.resolve(setMsg(`Severity must be above 0 and at most ${form.max}`)) : fetch("/api/live/inject", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ kind: form.kind, severity: Number(form.severity), ramp_h: Number(form.ramp), channel: form.channel }),
   }).then(async (r) => { const j = await r.json(); if (!r.ok) throw new Error(j.detail); setMsg(`Injected ${form.label}`); refresh(); })
-    .catch((e) => setMsg(String(e.message || e)));
+    .catch((e) => setMsg(String(e.message || e))));
   const remove = (id) => fetch(`/api/live/inject${id ? `/${id}` : ""}`, { method: "DELETE" }).then(refresh);
   return (
     <Panel title="Inject a fault" help={HELP.inject}>
@@ -119,6 +141,7 @@ export function InjectPanel() {
         </label>
         <label>Severity {form.unit && <span className="text-dim">({form.unit})</span>}
           <input className="w-full border border-edge rounded-lg px-2 py-1.5 num" value={form.severity}
+            type="number" step="any" min={0} max={form.max}
             onChange={(e) => setForm({ ...form, severity: e.target.value })} />
         </label>
         <label>Ramp (h)

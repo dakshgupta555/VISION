@@ -1,0 +1,488 @@
+{
+ "speed": 120.0,
+ "faults": {
+  "cooling_degradation": {
+   "fault": "Cooling degradation",
+   "kind": "cooling_degradation",
+   "severity": 0.3,
+   "ramp_h": 24,
+   "channel": null,
+   "expected_family": "asset",
+   "alerts_before_injection": [],
+   "injected_at": "2026-10-10T22:46:00",
+   "first_alert": {
+    "what": "Cooling path degraded",
+    "family": "asset",
+    "after_h": 16.75
+   },
+   "detected": true,
+   "alert": "Cooling path degraded",
+   "family": "asset",
+   "level": "alarm",
+   "detect_h": 16.75,
+   "alert_episode_start_h": 16.75,
+   "all_live": [
+    "Cooling path degraded"
+   ],
+   "recommendations": [
+    "Inspect radiators for fouling, check oil level and fans. Schedule within days, not weeks."
+   ],
+   "newest_fault": {
+    "component": "radiators",
+    "what": "Cooling path degraded",
+    "family": "asset",
+    "start": "2026-10-11T15:31:00"
+   },
+   "colour_changes": [
+    {
+     "id": "radiators",
+     "name": "Radiator fins",
+     "from": "green",
+     "to": "red",
+     "why": "Oil rise is 10 % above what load and ambient explain."
+    },
+    {
+     "id": "conservator",
+     "name": "Conservator and oil gauge",
+     "from": "grey",
+     "to": "yellow",
+     "why": "Oil level is not measured, and the cooling alarm is active: low oil is one possible cause."
+    }
+   ],
+   "ui": {
+    "whats": "What's happening\n?\n\nCooling is weakening: the radiators are shedding less heat than designed\n\nThe oil's temperature rise is 10 % higher than this load and weather explain. Left alone, the insulation wears faster and the unit will overheat at a lower load than its rating.\n\nWhat to do\nAct now\nInspect radiators for fouling, check oil level and fans. Schedule within days, not weeks.\n\nHow sure: Detected 11 Oct, 15:31; cooling fit slope 1.10 against an alarm level of 1.06 (1.00 = as designed). The extra rise grows with load, which a faulty probe cannot do.",
+    "status": "Alarm",
+    "callout": [
+     "Radiator fins: Cooling path degraded"
+    ],
+    "banner": [],
+    "problems": []
+   },
+   "health": 75.0,
+   "physical_limit": false,
+   "clear_after_h": 4.0,
+   "done": true
+  },
+  "oil_loss": {
+   "fault": "Oil loss",
+   "kind": "oil_loss",
+   "severity": 0.3,
+   "ramp_h": 72,
+   "channel": null,
+   "expected_family": "asset",
+   "alerts_before_injection": [],
+   "injected_at": "2026-10-10T22:46:00",
+   "first_alert": {
+    "what": "Cooling path degraded",
+    "family": "asset",
+    "after_h": 29.75
+   },
+   "detected": true,
+   "alert": "Cooling path degraded",
+   "family": "asset",
+   "level": "alarm",
+   "detect_h": 29.75,
+   "alert_episode_start_h": 29.75,
+   "all_live": [
+    "Cooling path degraded"
+   ],
+   "recommendations": [
+    "Inspect radiators for fouling, check oil level and fans. Schedule within days, not weeks."
+   ],
+   "newest_fault": {
+    "component": "radiators",
+    "what": "Cooling path degraded",
+    "family": "asset",
+    "start": "2026-10-12T04:31:00"
+   },
+   "colour_changes": [
+    {
+     "id": "radiators",
+     "name": "Radiator fins",
+     "from": "green",
+     "to": "red",
+     "why": "Oil rise is 7 % above what load and ambient explain."
+    },
+    {
+     "id": "conservator",
+     "name": "Conservator and oil gauge",
+     "from": "grey",
+     "to": "yellow",
+     "why": "Oil level is not measured, and the cooling alarm is active: low oil is one possible cause."
+    }
+   ],
+   "ui": {
+    "whats": "What's happening\n?\n\nCooling is weakening: the radiators are shedding less heat than designed\n\nThe oil's temperature rise is 7 % higher than this load and weather explain. Left alone, the insulation wears faster and the unit will overheat at a lower load than its rating.\n\nWhat to do\nAct now\nInspect radiators for fouling, check oil level and fans. Schedule within days, not weeks.\n\nHow sure: Detected 12 Oct, 04:31; cooling fit slope 1.07 against an alarm level of 1.06 (1.00 = as designed). The extra rise grows with load, which a faulty probe cannot do.",
+    "status": "Alarm",
+    "callout": [
+     "Radiator fins: Cooling path degraded"
+    ],
+    "banner": [],
+    "problems": []
+   },
+   "health": 75.0,
+   "physical_limit": false,
+   "clear_after_h": 6.0,
+   "done": true
+  },
+  "overload": {
+   "fault": "Overload",
+   "kind": "overload",
+   "severity": 1.25,
+   "ramp_h": 1,
+   "channel": null,
+   "expected_family": "asset",
+   "alerts_before_injection": [],
+   "injected_at": "2026-10-10T22:46:00",
+   "first_alert": {
+    "what": "Overload",
+    "family": "asset",
+    "after_h": 0.25
+   },
+   "detected": true,
+   "alert": "Overload",
+   "family": "asset",
+   "level": "alarm",
+   "detect_h": 0.25,
+   "alert_episode_start_h": 0.25,
+   "all_live": [
+    "Overload"
+   ],
+   "recommendations": [
+    "Shed 10% of load to keep the hot-spot under 110\u00a0\u00b0C; at this load it gets there in 110 min. If nothing changes it settles at 124\u00a0\u00b0C."
+   ],
+   "newest_fault": {
+    "component": "lv_winding_r",
+    "what": "Overload",
+    "family": "asset",
+    "start": "2026-10-10T23:01:00"
+   },
+   "colour_changes": [
+    {
+     "id": "lv_winding_r",
+     "name": "LV winding, R phase",
+     "from": "green",
+     "to": "red",
+     "why": "R-phase current 151.4 A is 114 % of rated."
+    },
+    {
+     "id": "lv_winding_y",
+     "name": "LV winding, Y phase",
+     "from": "green",
+     "to": "red",
+     "why": "Y-phase current 148.1 A is 111 % of rated."
+    },
+    {
+     "id": "lv_winding_b",
+     "name": "LV winding, B phase",
+     "from": "green",
+     "to": "red",
+     "why": "B-phase current 145.7 A is 109 % of rated."
+    },
+    {
+     "id": "hv_winding_r",
+     "name": "HV winding, R phase",
+     "from": "green",
+     "to": "red",
+     "why": "Inferred from the LV current via the turns ratio. R-phase current 151.4 A is 114 % of rated."
+    },
+    {
+     "id": "hv_winding_y",
+     "name": "HV winding, Y phase",
+     "from": "green",
+     "to": "red",
+     "why": "Inferred from the LV current via the turns ratio. Y-phase current 148.1 A is 111 % of rated."
+    },
+    {
+     "id": "hv_winding_b",
+     "name": "HV winding, B phase",
+     "from": "green",
+     "to": "red",
+     "why": "Inferred from the LV current via the turns ratio. B-phase current 145.7 A is 109 % of rated."
+    }
+   ],
+   "ui": {
+    "whats": "What's happening\n?\n\nThe transformer is overloaded: it is carrying 111 % of its rating\n\nThe windings are heating faster than designed and the insulation is wearing faster than normal.\n\nWhat to do\nAct now\nShed 10% of load to keep the hot-spot under 110\u00a0\u00b0C; at this load it gets there in 110 min.\nIf nothing changes it settles at 124\u00a0\u00b0C.\n\nHow sure: Detected 10 Oct, 23:01; Load reached 111% of rating.",
+    "status": "Alarm",
+    "callout": [
+     "LV winding, R phase: Overload"
+    ],
+    "banner": [],
+    "problems": []
+   },
+   "health": 10.0,
+   "physical_limit": false,
+   "clear_after_h": 0.25,
+   "done": true
+  },
+  "unbalance_growth": {
+   "fault": "Phase unbalance",
+   "kind": "unbalance_growth",
+   "severity": 0.12,
+   "ramp_h": 24,
+   "channel": null,
+   "expected_family": "asset",
+   "alerts_before_injection": [],
+   "injected_at": "2026-10-10T22:46:00",
+   "first_alert": {
+    "what": "Phase load unbalance growing",
+    "family": "asset",
+    "after_h": 7.25
+   },
+   "detected": true,
+   "alert": "Phase load unbalance growing",
+   "family": "asset",
+   "level": "warn",
+   "detect_h": 7.25,
+   "alert_episode_start_h": 6.5,
+   "all_live": [
+    "Phase load unbalance growing"
+   ],
+   "recommendations": [
+    "Rebalance single-phase loads across R/Y/B at the next feeder visit."
+   ],
+   "newest_fault": {
+    "component": "lv_winding_b",
+    "what": "Phase load unbalance growing",
+    "family": "asset",
+    "start": "2026-10-11T05:16:00"
+   },
+   "colour_changes": [
+    {
+     "id": "lv_winding_b",
+     "name": "LV winding, B phase",
+     "from": "green",
+     "to": "yellow",
+     "why": "This phase carries the unbalance."
+    },
+    {
+     "id": "hv_winding_b",
+     "name": "HV winding, B phase",
+     "from": "green",
+     "to": "yellow",
+     "why": "Inferred from the LV current via the turns ratio. This phase carries the unbalance."
+    }
+   ],
+   "ui": {
+    "whats": "What's happening\n?\n\nThe three phases are unevenly loaded\n\nCurrent unbalance is 4.6 %. The busiest phase runs hotter than the average suggests, and the neutral carries extra current.\n\nWhat to do\nPlan this week\nRebalance single-phase loads across R/Y/B at the next feeder visit.\n\nHow sure: Detected 11 Oct, 05:16; Phase currents have moved apart (peak 4.6% unbalance) and the voltages confirm a real redistribution of load, not a CT error.",
+    "status": "Warning",
+    "callout": [
+     "LV winding, B phase: Phase load unbalance growing"
+    ],
+    "banner": [],
+    "problems": []
+   },
+   "health": 90.0,
+   "physical_limit": false,
+   "clear_after_h": 0.5,
+   "done": true
+  },
+  "sensor_drift": {
+   "fault": "Oil probe drift",
+   "kind": "sensor_drift",
+   "severity": 5,
+   "ramp_h": 24,
+   "channel": "oil_temp",
+   "expected_family": "sensor",
+   "alerts_before_injection": [],
+   "injected_at": "2026-10-10T22:46:00",
+   "first_alert": {
+    "what": "Thermal model mismatch",
+    "family": "other",
+    "after_h": 10.75
+   },
+   "detected": true,
+   "alert": "Temperature instrument offset (top-oil or ambient probe)",
+   "family": "sensor",
+   "level": "warn",
+   "detect_h": 13.75,
+   "alert_episode_start_h": 13.75,
+   "all_live": [
+    "Temperature instrument offset (top-oil or ambient probe)"
+   ],
+   "recommendations": [
+    "Recalibrate or replace the probe. Do not dispatch for a transformer fault; treat oil-temperature trips as unreliable until fixed."
+   ],
+   "newest_fault": {
+    "component": "oil_pocket",
+    "what": "Temperature instrument offset (top-oil or ambient probe)",
+    "family": "sensor",
+    "start": "2026-10-11T12:31:00"
+   },
+   "colour_changes": [
+    {
+     "id": "oil",
+     "name": "Insulating oil",
+     "from": "green",
+     "to": "grey",
+     "why": "The oil probe is untrusted: the oil temperature cannot be assessed from measurement."
+    },
+    {
+     "id": "oil_pocket",
+     "name": "Oil temperature pocket (probe)",
+     "from": "green",
+     "to": "sensor",
+     "why": "Instrument fault, transformer unaffected: every reading is shifted by +2.4 K at every load: oil or ambient probe, they are thermally identical."
+    },
+    {
+     "id": "monitor_box",
+     "name": "Monitoring device (V, I and temperature logger, GPRS)",
+     "from": "green",
+     "to": "sensor",
+     "why": "Instrument fault, transformer unaffected: temperature offset (top-oil temperature or ambient temperature)."
+    }
+   ],
+   "ui": {
+    "whats": "What's happening\n?\n\nA temperature sensor is reading wrong; the transformer itself is fine\n\nThe oil-rise reading is shifted by 2.4 K at every load, which is what a drifting probe does. A real heating fault would grow with load instead.\n\nWhat to do\nPlan this week\nRecalibrate or replace the probe. Do not dispatch for a transformer fault; treat oil-temperature trips as unreliable until fixed.\n\nHow sure: Detected 11 Oct, 12:31; cooling fit offset 2.4 K with slope 1.00: the reading moved, the transformer's response to load did not.",
+    "status": "Sensor fault",
+    "callout": [
+     "Oil temperature pocket (probe): instrument fault"
+    ],
+    "banner": [],
+    "problems": []
+   },
+   "health": 92.0,
+   "physical_limit": false,
+   "clear_after_h": 1.0,
+   "done": true
+  },
+  "sensor_stuck": {
+   "fault": "Stuck current channel",
+   "kind": "sensor_stuck",
+   "severity": 1,
+   "ramp_h": 0,
+   "channel": "IY",
+   "expected_family": "sensor",
+   "alerts_before_injection": [],
+   "injected_at": "2026-10-10T22:46:00",
+   "first_alert": {
+    "what": "Y-phase current reading frozen",
+    "family": "sensor",
+    "after_h": 1.0
+   },
+   "detected": true,
+   "alert": "Y-phase current reading frozen",
+   "family": "sensor",
+   "level": "warn",
+   "detect_h": 1.0,
+   "alert_episode_start_h": 0.5,
+   "all_live": [
+    "Y-phase current reading frozen"
+   ],
+   "recommendations": [
+    "Reset the logger channel; values during this period were replaced."
+   ],
+   "newest_fault": {
+    "component": "monitor_box",
+    "what": "Y-phase current reading frozen",
+    "family": "sensor",
+    "start": "2026-10-10T23:16:00"
+   },
+   "colour_changes": [
+    {
+     "id": "lv_winding_y",
+     "name": "LV winding, Y phase",
+     "from": "green",
+     "to": "grey",
+     "why": "Y-phase current: frozen. This phase cannot be assessed."
+    },
+    {
+     "id": "hv_winding_y",
+     "name": "HV winding, Y phase",
+     "from": "green",
+     "to": "grey",
+     "why": "Y-phase current: frozen. This phase cannot be assessed."
+    },
+    {
+     "id": "monitor_box",
+     "name": "Monitoring device (V, I and temperature logger, GPRS)",
+     "from": "green",
+     "to": "sensor",
+     "why": "Instrument fault, transformer unaffected: Y-phase current: frozen."
+    }
+   ],
+   "ui": {
+    "whats": "What's happening\n?\n\nThe Y-phase current measurement is frozen; the transformer itself is fine\n\nThe value has not changed for too long to be real. The twin replaces it from the other channels.\n\nWhat to do\nPlan this week\nReset the logger channel; values during this period were replaced.\n\nHow sure: Detected 10 Oct, 23:16; Cross-checked against the other channels; the transformer state is unaffected.",
+    "status": "Sensor fault",
+    "callout": [
+     "Monitoring device (V, I and temperature logger, GPRS): instrument fault"
+    ],
+    "banner": [],
+    "problems": []
+   },
+   "health": 91.0,
+   "physical_limit": false,
+   "clear_after_h": 0.25,
+   "done": true
+  },
+  "sensor_dead": {
+   "fault": "Dead current channel",
+   "kind": "sensor_dead",
+   "severity": 1,
+   "ramp_h": 0,
+   "channel": "IB",
+   "expected_family": "sensor",
+   "alerts_before_injection": [],
+   "injected_at": "2026-10-10T22:46:00",
+   "first_alert": {
+    "what": "B-phase current reading missing",
+    "family": "sensor",
+    "after_h": 0.25
+   },
+   "detected": true,
+   "alert": "B-phase current reading missing",
+   "family": "sensor",
+   "level": "warn",
+   "detect_h": 0.25,
+   "alert_episode_start_h": 0.25,
+   "all_live": [
+    "B-phase current reading missing"
+   ],
+   "recommendations": [
+    "Check wiring and the logger input."
+   ],
+   "newest_fault": {
+    "component": "monitor_box",
+    "what": "B-phase current reading missing",
+    "family": "sensor",
+    "start": "2026-10-10T23:01:00"
+   },
+   "colour_changes": [
+    {
+     "id": "lv_winding_b",
+     "name": "LV winding, B phase",
+     "from": "green",
+     "to": "grey",
+     "why": "B-phase current: no valid reading. This phase cannot be assessed."
+    },
+    {
+     "id": "hv_winding_b",
+     "name": "HV winding, B phase",
+     "from": "green",
+     "to": "grey",
+     "why": "B-phase current: no valid reading. This phase cannot be assessed."
+    },
+    {
+     "id": "monitor_box",
+     "name": "Monitoring device (V, I and temperature logger, GPRS)",
+     "from": "green",
+     "to": "sensor",
+     "why": "Instrument fault, transformer unaffected: B-phase current: no valid reading."
+    }
+   ],
+   "ui": {
+    "whats": "What's happening\n?\n\nThe B-phase current measurement has stopped; the transformer itself is fine\n\nNo value is arriving. The twin rebuilds it from the other channels, so the diagnosis continues.\n\nWhat to do\nPlan this week\nCheck wiring and the logger input.\n\nHow sure: Detected 10 Oct, 23:01; The logger sent no value for this channel. Cross-checked against the other channels; the twin carries on without it.",
+    "status": "Sensor fault",
+    "callout": [
+     "Monitoring device (V, I and temperature logger, GPRS): instrument fault"
+    ],
+    "banner": [],
+    "problems": []
+   },
+   "health": 97.0,
+   "physical_limit": false,
+   "clear_after_h": 0.25,
+   "done": true
+  }
+ }
+}

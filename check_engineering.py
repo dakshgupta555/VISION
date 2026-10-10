@@ -187,6 +187,12 @@ check("oil leak: indication distinguished from the confirmed source",
       "INDICATION" in leak["indication_vs_source"] and "CONFIRMED" in leak["indication_vs_source"])
 wr = cat["conditions"]["winding_repair"]["materials"][0]
 check("winding work: conductor grades and sizes stated as not interchangeable", "NOT interchangeable" in wr["note"])
+TBF = "to be filled from approved vendor data"
+unsourced = [k for k, c in cat["conditions"].items() if not c.get("source")]
+unsourced += [m["item"] for c in cat["conditions"].values() for m in c.get("materials", [])
+              if not m.get("source") or any(m.get(f) != TBF for f in ("supplier", "part_no", "price_inr"))]
+check("catalogue: every condition cites a source; every material's supplier, part number and price "
+      f"read '{TBF}'", not unsourced, str(unsourced[:3]))
 check("every corrective condition lists inspection, corrective action, qualification and safety",
       all(c["inspection"] and c["corrective"] and c["qualification"] is not None and "safety" in c
           for r in runs.values() for rec in r["agents"]["recommendation"] for c in rec["corrective"]["conditions"]))

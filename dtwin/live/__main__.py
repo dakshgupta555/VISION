@@ -3,6 +3,7 @@ Live simulator: steps the transformer physics one sample at a time, adds sensor
 noise, and POSTs each sample to the backend, exactly as the ESP32 device will
 (same JSON contract, source "sensor" instead of "simulator").
 
+    python -m dtwin.live                          # 120x: 15-min samples, one every 7.5 s
     python -m dtwin.live --speed 600              # 15-min samples, one every 1.5 s
     python -m dtwin.live --speed 3600 --prewarm-h 48 --api http://127.0.0.1:8000
 
@@ -133,7 +134,7 @@ class Link:
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("--api", default="http://127.0.0.1:8000")
-    ap.add_argument("--speed", type=float, default=600.0, help="simulated seconds per real second")
+    ap.add_argument("--speed", type=float, default=120.0, help="simulated seconds per real second")
     ap.add_argument("--interval-min", type=float, default=15.0, help="sample interval, simulated minutes")
     ap.add_argument("--prewarm-h", type=float, default=48.0)
     ap.add_argument("--seed", type=int, default=7)

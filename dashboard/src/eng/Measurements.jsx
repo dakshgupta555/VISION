@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { BG, band, Card, fmt, LEVEL, PRIORITY, TEXT, when } from "../ui.jsx";
 import { HELP } from "../help.js";
+import { capNote } from "../plain.js";
 import { AmbientTable, Cooling, Countdown, Gprs, Life, Notifications, SelfTest, WhatIf } from "../features.jsx";
 import { InjectPanel } from "../live.jsx";
 import { Details } from "../overview/Overview.jsx";
 
 // Engineering tab, "Measurements and alarms": everything the old dashboard
 // showed, with full history and the technical names.
+
+const ND = { pu: 2, "%": 1, "": 3 };   // decimals by unit
 
 function HealthBreakdown({ s }) {
   const h = s.health;
@@ -21,14 +24,15 @@ function HealthBreakdown({ s }) {
             <div key={c.key}>
               <div className="flex justify-between text-[15px]">
                 <span>{c.label} <span className="text-dim text-sm">weight {Math.round(100 * c.weight)} %</span></span>
-                <span>{fmt(c.value, 3)} {c.unit}: <b className={b === "ok" ? "" : TEXT[b]}>{fmt(c.score, 0)}</b></span>
+                <span>{fmt(c.value, ND[c.unit] ?? 3)} {c.unit}: <b className={b === "ok" ? "" : TEXT[b]}>{fmt(c.score, 0)}</b></span>
               </div>
               <div className="h-2 rounded-full bg-ink mt-1"><div className={`h-2 rounded-full ${BG[b]}`} style={{ width: `${Math.max(c.score ?? 0, 3)}%` }} /></div>
-              <div className="text-sm text-dim mt-0.5">100 at {c.good}, 0 at {fmt(c.bad, 3)} (where its alarm fires)</div>
+              <div className="text-sm text-dim mt-0.5">100 at {fmt(c.good, ND[c.unit] ?? 3)}, 0 at {fmt(c.bad, ND[c.unit] ?? 3)} (where its alarm fires)</div>
             </div>
           );
         })}
       </div>
+      {capNote(h) && <p className="text-sm mt-3">{capNote(h)}</p>}
     </Card>
   );
 }
@@ -73,7 +77,7 @@ function Recommendations({ s }) {
           return (
             <li key={k} className="flex gap-3 items-start">
               <span className={`shrink-0 text-sm font-semibold px-2 py-0.5 rounded-md border ${LEVEL[p.tone]}`}>{p.label}</span>
-              <span className="text-[15px]">{r.text}<span className="block text-sm text-dim">{r.because}</span></span>
+              <span className="text-[15px]">{r.text}{r.detail && <span className="block">{r.detail}</span>}<span className="block text-sm text-dim">{r.because}</span></span>
             </li>
           );
         })}

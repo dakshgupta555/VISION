@@ -3,11 +3,11 @@ import {
   CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import {
-  api, axis, Card, duration, fmt, Fold, grid, Help, Icon, PHASE, PRIORITY, StatusPill, Tabs, Term, tip, when,
+  api, axis, Card, duration, fmt, Fold, grid, Help, hrs, Icon, inr, PHASE, PRIORITY, StatusPill, Tabs, Term, tip, when,
 } from "../ui.jsx";
 import { HELP } from "../help.js";
-import { headlineFor, overallStatus, suspectSet } from "../plain.js";
-import { ModeSwitch, InjectPanel } from "../live.jsx";
+import { capNote, headlineFor, overallStatus, suspectSet } from "../plain.js";
+import { ModeSwitch, InjectPanel, SPEEDS } from "../live.jsx";
 import { NameplateSelect, AmbientTable } from "../features.jsx";
 import { Inspector, useComponents, useFem, useRecommendations } from "../twin/TwinPage.jsx";
 import { FOCUS } from "../twin/focus.js";
@@ -98,7 +98,7 @@ export function TopBar({ ctx, view, setView }) {
         <ModeSwitch mode={mode} setMode={setMode} />
         <div className="text-right leading-tight">
           <div className="text-[15px] font-semibold">{when(s.timestamp)}</div>
-          <div className="text-sm text-dim">{mode === "live" ? `sample ${fmt(ls?.sample_age_s, 1)} s old` : "replay time"}</div>
+          <div className="text-sm text-dim">{mode === "live" ? `sample ${fmt(live?.link?.age ?? ls?.sample_age_s, 0)} s old` : "replay time"}</div>
         </div>
         <Settings ctx={ctx} />
       </div>
@@ -163,9 +163,9 @@ export function TimeBar({ ctx }) {
         <span className="font-semibold">Live stream</span>
         <span className="text-dim">new sample every {fmt(st.period_s, 1)} s</span>
         <label className="flex items-center gap-2 text-dim">Speed
-          <select className="border border-edge rounded-lg px-2 py-1 text-fg" value={st.speed || 600}
+          <select className="border border-edge rounded-lg px-2 py-1 text-fg" value={st.speed || 120}
             onChange={(e) => control({ speed: Number(e.target.value) })}>
-            {[60, 300, 600, 1800, 3600].map((x) => <option key={x} value={x}>{x}× real time</option>)}
+            {SPEEDS.map((x) => <option key={x} value={x}>{x}× real time</option>)}
           </select>
         </label>
         <button className="twin-btn" onClick={() => control({ paused: !st.paused })}>{st.paused ? "Resume" : "Pause"}</button>
@@ -173,7 +173,7 @@ export function TimeBar({ ctx }) {
           <span className="text-warn" title="The 24 h cooling fit needs history; it fills in as samples arrive.">
             History rebuilding, {st.history.n} of {st.history.need ?? 192} samples</span>
         )}
-        {st.stale && <span className="text-dim">{st.reason}</span>}
+        {st.stale && !live?.link?.disconnected && <span className="text-dim">{st.reason}</span>}
         <div className="relative ml-auto">
           <button className="twin-btn" onClick={() => setInject(!inject)} aria-expanded={inject}>Inject a fault</button>
           {inject && <div className="absolute right-0 top-11 z-50 w-[36rem]"><InjectPanel /></div>}
@@ -269,6 +269,7 @@ function Whats({ s, stale }) {
   const st = overallStatus(s, stale);
   const h = headlineFor(s);
   const acts = s.recommendations.filter((r) => r.family !== "reference" && !(r.priority === 3 && st.level !== "ok")).slice(0, 2);
+  const beyond = s.physical_limit?.beyond;
   const hs = s.countdown.hotspot;
   const evidence = h.alert ? `Detected ${when(h.alert.start)}; ${h.evidence ?? h.alert.why}`
     : s.recommendations.find((r) => r.priority === 3)?.because;
@@ -276,6 +277,11 @@ function Whats({ s, stale }) {
   const calm = st.level === "ok";
   return (
     <Card title="What's happening" help={HELP.whats} className={`border-l-4 ${TONE_BORDER[st.level]}`}>
+      {beyond && (
+        <p className="mb-3 px-3 py-2 rounded-lg border-2 border-alarm text-alarm font-semibold flex items-center gap-2">
+          <Icon name="alarm" className="w-5 h-5 shrink-0" />{s.physical_limit.message}
+        </p>
+      )}
       <div className="flex gap-3">
         <span className={`mt-1 ${TONE_TEXT[st.level]}`}><Icon name={st.level === "info" ? "info" : st.level} className="w-7 h-7" /></span>
         <div className="min-w-0">
@@ -292,14 +298,15 @@ function Whats({ s, stale }) {
               return (
                 <li key={k} className="flex gap-3 items-start">
                   <span className={`shrink-0 text-sm font-semibold px-2 py-0.5 rounded-md border ${TONE_BORDER[p.tone]} ${TONE_TEXT[p.tone]}`}>{p.label}</span>
-                  <span className="text-[15px]">{r.text}</span>
+                  <span className="text-[15px]">{r.text}
+                    {r.detail && <span className="block text-dim">{r.detail}</span>}</span>
                 </li>
               );
             })}
           </ul>
         </div>
       )}
-      {(hs.already_above || hs.minutes !== null) && (
+      {(hs.already_above || hs.minutes !== null) && (calm || !acts.some((r) => r.detail)) && (
         <p className="mt-3 text-[15px]">
           <b className={hs.already_above ? "text-alarm" : "text-warn"}>
             {hs.already_above ? `Hot-spot is above ${hs.limit_c} °C now` : `Hot-spot reaches ${hs.limit_c} °C in ${duration(hs.minutes)}`}
@@ -343,7 +350,7 @@ function LimitBar({ value, lim, inverse = false }) {
   );
 }
 
-function KeyNumber({ label, tech, value, unit, d = 0, lim, inverse, help, suspect, caption }) {
+function KeyNumber({ label, tech, value, unit, d = 0, lim, inverse, help, suspect, caption, note }) {
   const v = value === null || value === undefined ? null : Number(value);
   const lv = v === null ? null : inverse
     ? (v < lim.alarm_below ? "alarm" : v < lim.warn_below ? "warn" : "ok")
@@ -362,7 +369,7 @@ function KeyNumber({ label, tech, value, unit, d = 0, lim, inverse, help, suspec
         {caption && <span className="ml-auto text-sm text-dim">{caption}</span>}
       </div>
       <div className={`mt-1.5 text-sm font-semibold flex items-center gap-1.5 ${TONE_TEXT[tone]}`}>
-        <Icon name={tone === "info" ? "info" : tone} className="w-4 h-4" />{word}
+        <Icon name={tone === "info" ? "info" : tone} className="w-4 h-4" />{note || word}
       </div>
       <LimitBar value={v} lim={lim} inverse={inverse} />
     </Card>
@@ -378,7 +385,8 @@ function KeyNumbers({ s }) {
   return (
     <div className="grid grid-cols-2 gap-4">
       <KeyNumber label="Hot-spot temperature" tech="Winding hot-spot, IEEE C57.91" value={r.hotspot_c} unit="°C" d={0}
-        lim={L.hotspot_c} help={HELP.hotspot(L.hotspot_c)} suspect={oilSus} caption={`limit ${L.hotspot_c.limit} °C`} />
+        lim={L.hotspot_c} help={HELP.hotspot(L.hotspot_c)} suspect={oilSus} caption={`limit ${L.hotspot_c.limit} °C`}
+        note={s.physical_limit?.beyond && !oilSus ? `Above the ${s.physical_limit.emergency_hotspot_c} °C limit` : null} />
       <KeyNumber label="Load" tech="Load ratio K, RMS of three phases" value={r.load_pct} unit="% of rating" lim={L.load_pct}
         help={HELP.load(L.load_pct, s.nameplate.rated_current_a)} suspect={curSus} />
       <KeyNumber label="Top-oil temperature" tech="Top oil, measured by the oil probe" value={r.oil_c} unit="°C" d={0}
@@ -449,6 +457,11 @@ function Trends({ series, limits, prewarmUntil }) {
 }
 
 // ======================================================================= engineering details
+// decimals by unit: pu at most 2, % one, a unitless slope three
+const ND = { pu: 2, "%": 1, "": 3 };
+// channel states in words (same as dtwin/labels.py STATE)
+const STATE_WORD = { ok: "trusted", step: "trusted (step seen)", dead: "no valid reading", stuck: "frozen",
+  suspect: "disagrees with the other phases", absent: "not recorded" };
 function Row({ label, tech, children }) {
   return (
     <div className="flex justify-between gap-4 py-1.5 border-t border-edge text-[15px]">
@@ -465,7 +478,7 @@ export function Details({ s }) {
   const f = s.countdown.fixed;
   const [table, setTable] = useState(false);
   const chName = { IR: "R current", IY: "Y current", IB: "B current", VR: "R voltage", VY: "Y voltage", VB: "B voltage",
-    oil_temp: "Oil temperature", ambient_temp: "Ambient temperature" };
+    oil_temp: "Top-oil temperature", ambient_temp: "Ambient temperature" };
   return (
     <Fold title="Engineering details" help={HELP.details} summary="Phases, channels, cooling fit, insulation wear, protection">
       <div className="grid gap-x-10 gap-y-6 lg:grid-cols-3">
@@ -492,7 +505,7 @@ export function Details({ s }) {
           <div className="grid grid-cols-2 gap-2 mb-2">
             {Object.keys(r.channels).map((c) => (
               <div key={c} className={`rounded-lg border px-2 py-1 text-sm ${sus.has(c) ? "border-sensor text-sensor border-2" : "border-edge"}`}
-                title={`Channel ${c}: ${r.channels[c]}`}>
+                title={`${chName[c] || c}: ${STATE_WORD[r.channels[c]] || r.channels[c]}`}>
                 {chName[c] || c}: {sus.has(c) ? "suspect" : "trusted"}
               </div>
             ))}
@@ -507,8 +520,8 @@ export function Details({ s }) {
           <Row label="Cooling fit, offset" tech="Rise-fit intercept b: a probe offset shows here">{fmt(r.intercept_k, 2)} K</Row>
           <Row label="Insulation wear" tech="Ageing acceleration factor F_AA, IEEE C57.91">wearing at {fmt(r.faa, 2)}× normal speed</Row>
           <Row label="Life used, last 24 h" tech="Equivalent aged hours and their value at replacement cost / rated life">
-            {fmt(L.last_24h.aged_h, 2)} h, worth ₹{fmt(L.last_24h.inr, 0)}</Row>
-          <Row label="Existing protection setting (comparison)" tech={`The CPRI device's fixed ${f.limit_c} °C top-oil trip; not used for status`}>
+            {hrs(L.last_24h.aged_h)} h, worth {inr(L.last_24h.inr)}</Row>
+          <Row label="Existing protection setting (comparison)" tech={`The existing monitoring device's fixed ${f.limit_c} °C top-oil trip; not used for status`}>
             {s.reference.fixed_trip_active ? `would have tripped at ${when(s.reference.since)}`
               : f.minutes !== null ? `would trip in ${duration(f.minutes)}` : `${f.limit_c} °C trip not reached`}
           </Row>
@@ -522,11 +535,12 @@ export function Details({ s }) {
         <div className="grid md:grid-cols-5 gap-4">
           {s.health.components.map((c) => (
             <div key={c.key} className="text-[15px]">
-              <div className="text-dim text-sm" title={`${c.label}: 100 at ${c.good}, 0 at ${fmt(c.bad, 3)} ${c.unit}`}>{c.label.split(" (")[0]}</div>
+              <div className="text-dim text-sm" title={`${c.label}: 100 at ${fmt(c.good, ND[c.unit] ?? 3)}, 0 at ${fmt(c.bad, ND[c.unit] ?? 3)} ${c.unit}`}>{c.label.split(" (")[0]}</div>
               <div className="font-semibold">{fmt(c.score, 0)} <span className="text-dim font-normal text-sm">of 100, weight {Math.round(100 * c.weight)} %</span></div>
             </div>
           ))}
         </div>
+        {capNote(s.health) && <p className="text-sm mt-2">{capNote(s.health)}</p>}
       </div>
     </Fold>
   );

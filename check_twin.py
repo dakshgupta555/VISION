@@ -78,5 +78,21 @@ want = tw.df.oil_temp.iloc[i] + hotspot_rise_ultimate(k, tw.np_)
 check("winding hot-spot = measured top oil + C57.91 gradient", abs(w["hotspot_c"] - want) < 0.06,
       f"{w['hotspot_c']} vs {want:.2f} C")
 
+# ---- health index cap and the physical limit -------------------------------------------------
+hl = get_twin("healthy")
+binds = [i for i in range(0, len(hl.rows), 8) if hl.health(i)["capped_by"]]
+check("health cap never binds on the healthy record", not binds, f"{len(binds)} capped instants")
+so = get_twin("summer_overload")
+hot = so.rows.hotspot_c.idxmax()
+h = so.health(so.locate(hot))
+check("extreme hot-spot drives the index near 0 (index <= worst of ageing, loading + 10)",
+      so.rows.hotspot_c.max() > 140 and h["index"] <= 10 and h["weighted_mean"] >= 50,
+      f"hot-spot {so.rows.hotspot_c.max():.0f} C: index {h['index']}, weighted mean {h['weighted_mean']}")
+st = so.state(so.locate(hot))
+check("above 140 C: 'protection would trip' shown and no ageing or cost accrues",
+      st["physical_limit"]["beyond"] and "protection would trip" in st["physical_limit"]["message"]
+      and so.rows.aged_h[so.rows.beyond_trip].sum() == 0 and st["life"]["since_start"]["beyond_trip_h"] > 0,
+      f"{st['life']['since_start']['beyond_trip_h']} h above 140 C not counted")
+
 print(f"\n  {sum(R)} of {len(R)} twin checks passed")
 sys.exit(0 if all(R) else 1)

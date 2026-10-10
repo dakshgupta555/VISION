@@ -2,9 +2,10 @@
 // number is read from the backend's /state response.
 import { duration, fmt } from "./ui.jsx";
 
-const CH = { IR: "R-phase current", IY: "Y-phase current", IB: "B-phase current", VR: "R-phase voltage",
-  VY: "Y-phase voltage", VB: "B-phase voltage", oil_temp: "oil temperature", ambient_temp: "ambient temperature" };
-const channelOf = (what) => CH[what.split(" ")[0]] || what.split(" ")[0];
+// Same names as dtwin/labels.py: no code names reach the screen.
+export const CH = { IR: "R-phase current", IY: "Y-phase current", IB: "B-phase current", VR: "R-phase voltage",
+  VY: "Y-phase voltage", VB: "B-phase voltage", oil_temp: "top-oil temperature", ambient_temp: "ambient temperature" };
+const channelOf = (a) => CH[a.channel] || "a";
 
 // kind -> { headline(s, a), meaning(s, a) }
 const PLAIN = {
@@ -35,15 +36,18 @@ const PLAIN = {
       + "the reading moved, the transformer's response to load did not.",
   },
   channel_dead: {
-    headline: (s, a) => `The ${channelOf(a.what)} measurement has stopped; the transformer itself is fine`,
-    meaning: () => "The reading is missing or invalid. The twin rebuilds it from the other channels, so the diagnosis continues.",
+    headline: (s, a) => (a.what.includes("plausible range") ? a.what
+      : `The ${channelOf(a)} measurement has stopped; the transformer itself is fine`),
+    meaning: (s, a) => (a.what.includes("plausible range")
+      ? `${a.why} Load is ${fmt(s.readings.load_pct, 0)} % of rating now.`
+      : "No value is arriving. The twin rebuilds it from the other channels, so the diagnosis continues."),
   },
   channel_stuck: {
-    headline: (s, a) => `The ${channelOf(a.what)} measurement is frozen; the transformer itself is fine`,
+    headline: (s, a) => `The ${channelOf(a)} measurement is frozen; the transformer itself is fine`,
     meaning: () => "The value has not changed for too long to be real. The twin replaces it from the other channels.",
   },
   channel_suspect: {
-    headline: (s, a) => `The ${channelOf(a.what)} measurement disagrees with the other phases`,
+    headline: (s, a) => `The ${channelOf(a)} measurement disagrees with the other phases`,
     meaning: () => "Most likely a wiring or CT/VT ratio fault on that phase, not the transformer.",
   },
   mismatch: {
@@ -90,4 +94,12 @@ export function suspectSet(s) {
   const sus = new Set((s.status.suspect_channels || "").split(",").filter(Boolean));
   Object.entries(s.readings.channels).forEach(([c, v]) => { if (!["ok", "step"].includes(v)) sus.add(c); });
   return sus;
+}
+
+// Why the health index is lower than its weighted mean, when it is.
+export function capNote(h) {
+  if (!h?.capped_by) return null;
+  const c = h.components.find((x) => x.key === h.capped_by);
+  return `Held at ${fmt(h.index, 0)}: the weighted mean of the five scores is ${fmt(h.weighted_mean, 0)}, but the index `
+    + `may not exceed its worst safety-critical score (${c.label.split(" (")[0].toLowerCase()}, ${fmt(c.score, 0)}) by more than 10.`;
 }

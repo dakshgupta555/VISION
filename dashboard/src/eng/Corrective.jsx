@@ -31,13 +31,15 @@ export default function Corrective({ rec }) {
                 {c.materials.map((m) => (
                   <tr key={m.item} className="border-t border-edge align-top">
                     <td className="py-0.5 pr-2">{m.item}</td><td className="py-0.5">{m.specification}
-                      {m.note && <div className="text-dim">{m.note}</div>}</td>
+                      {m.note && <div className="text-dim">{m.note}</div>}
+                      <div className="text-dim">Source: {m.source}. Supplier, part number and price: {m.supplier}.</div></td>
                   </tr>
                 ))}
               </tbody></table>
             </div>
           )}
           {c.notes && <div className="mt-2 text-xs text-dim">{c.notes}</div>}
+          {c.source && <div className="mt-1 text-xs text-dim">Source: {c.source}</div>}
         </div>
       ))}
       <p className="text-xs text-dim">{rec.corrective.advisory}</p>

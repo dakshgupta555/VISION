@@ -68,7 +68,7 @@ def _twin(name, kva=None):
     if name == "live":                                  # the live buffer, not a file
         from ..live.api import STORE
         if STORE.twin is None:
-            raise HTTPException(503, "no live data yet: start  python -m dtwin.live --speed 600")
+            raise HTTPException(503, "no live data yet: start  python -m dtwin.live")
         return STORE.twin
     if name not in scenarios():
         raise HTTPException(404, f"unknown scenario {name!r}")

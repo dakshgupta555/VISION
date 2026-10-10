@@ -30,6 +30,8 @@ from reportlab.lib.units import mm
 from reportlab.platypus import (KeepTogether, PageBreak, Paragraph, SimpleDocTemplate, Spacer,
                                 Table, TableStyle)
 
+from .labels import CHANNEL, group_in
+
 INK = colors.HexColor("#0b0f14")
 ACCENT = colors.HexColor("#0891b2")
 DIM = colors.HexColor("#64748b")
@@ -198,9 +200,17 @@ def build_story(tw, t=None):
     E.append(Spacer(1, 4))
     rows = [["Health component", "Value", "Score", "100 at", "0 at (alarm)", "Weight"]]
     for c in s["health"]["components"]:
-        rows.append([_s(c["label"]), _s(f"{_f(c['value'], 3)} {c['unit']}"), _f(c["score"], 0),
+        nd = {"pu": 2, "%": 1}.get(c["unit"], 3)
+        rows.append([_s(c["label"]), _s(f"{_f(c['value'], nd)} {c['unit']}"), _f(c["score"], 0),
                      _s(f"<= {c['good']:g}"), _s(f"{c['bad']:g}"), f"{c['weight']:.2f}"])
     E.append(_table(rows, [58 * mm, 28 * mm, 16 * mm, 22 * mm, 26 * mm, 16 * mm], align_right=(1, 2, 5)))
+    hh = s["health"]
+    if hh.get("capped_by"):
+        E.append(Paragraph(_e(f"Index held at {_f(hh['index'], 0)}: weighted mean {_f(hh['weighted_mean'], 0)}, but "
+                              f"{hh['cap_rule']}."), SMALL))
+    if s.get("physical_limit", {}).get("beyond"):
+        E.append(Paragraph(_e(s["physical_limit"]["message"] + "."),
+                           ParagraphStyle("lim", parent=BODY, textColor=ALARM)))
     cd = s["countdown"]
     h, fx = cd["hotspot"], cd["fixed"]
     E.append(Spacer(1, 3))
@@ -224,12 +234,16 @@ def build_story(tw, t=None):
     lrows = [["Window", "Aged hours", "Real hours", "Rate (x rated)", "Value (Rs)"]]
     for lab, key in (("Last hour", "last_1h"), ("Last 24 h", "last_24h"), ("Whole period", "since_start")):
         x = L[key]
-        lrows.append([lab, _f(x["aged_h"], 2), _f(x["real_h"], 1), _f(x["rate_pu"], 3), _f(x["inr"], 0)])
+        lrows.append([lab, _f(x["aged_h"], 1), _f(x["real_h"], 1), _f(x["rate_pu"], 2),
+                      group_in(x["inr"]) if x["inr"] is not None else "-"])
     E.append(_table(lrows, [40 * mm, 30 * mm, 30 * mm, 30 * mm, 30 * mm], align_right=(1, 2, 3, 4)))
     E.append(Paragraph(_e(f"IEEE C57.91 ageing acceleration, thermally upgraded paper, reference hot-spot "
-                          f"{np_.reference_hotspot_c:.0f} C. Rs {L['replacement_cost_inr']:,.0f} replacement "
-                          f"cost / {L['normal_life_hours']:,.0f} h rated life = Rs "
-                          f"{L['cost_per_aged_hour_inr']:.2f} per aged hour."), SMALL))
+                          f"{np_.reference_hotspot_c:.0f} C. Rs {group_in(L['replacement_cost_inr'])} assumed "
+                          f"replacement cost (illustrative) / {group_in(L['normal_life_hours'])} h normal life "
+                          f"(IEEE C57.91) = Rs {L['cost_per_aged_hour_inr']:.2f} per hour of life used. Hours with "
+                          f"the hot-spot above the {L['emergency_hotspot_c']:.0f} C emergency limit are not counted "
+                          f"(protection would trip): {_f(L['since_start']['beyond_trip_h'], 1)} h in this period."),
+                       SMALL))
 
     # ---- fault log ----------------------------------------------------------
     E.append(Paragraph("Fault log", H2))
@@ -306,10 +320,10 @@ def build_story(tw, t=None):
     for k in ["IR", "IY", "IB", "VR", "VY", "VB", "oil_temp", "ambient_temp"]:
         if k in rep.mapping:
             m, u = rep.mapping[k], rep.units.get(k, {})
-            mrows.append([k, Paragraph(_e(m["source"]), CELL), Paragraph(_e(m["how"]), CELL), m["confidence"],
+            mrows.append([Paragraph(_e(f"{CHANNEL[k]} ({k})"), CELL), Paragraph(_e(m["source"]), CELL), Paragraph(_e(m["how"]), CELL), m["confidence"],
                           _s(u.get("unit")), f"{u.get('factor', 1):g}", Paragraph(_e(u.get("how", "")), CELL)])
         else:
-            mrows.append([k, Paragraph(_e("DERIVED: " + rep.derived[k]) if k in rep.derived else "ABSENT", CELL),
+            mrows.append([Paragraph(_e(f"{CHANNEL[k]} ({k})"), CELL), Paragraph(_e("DERIVED: " + rep.derived[k]) if k in rep.derived else "ABSENT", CELL),
                           "", "", "", "", ""])
     E.append(_table(mrows, [20 * mm, 30 * mm, 34 * mm, 12 * mm, 12 * mm, 14 * mm, 52 * mm]))
     E.append(Spacer(1, 4))

@@ -12,7 +12,8 @@ most likely to be wrong on CPRI's data are marked **risk**.
 | Loss ratio R, exponents n, m | 5.0; 0.8, 0.8 | C57.91 ONAN values | Shape of rise vs load slightly off; small effect at normal loads. |
 | Oil time constant | 3 h (scaled by rating) | typical | Projection timing (minutes to limit) proportionally off. |
 | Insulation | thermally upgraded paper, 110 C reference, 180 000 h normal life | C57.91 | Non-upgraded paper uses 98 C and the Montsinger form; ageing figures and rupee values change. The nameplate has a flag for it. |
-| Replacement cost | Rs 4 500 per kVA (Rs 450 000 for 100 kVA) | order-of-magnitude for Indian distribution units | Rupee figures scale linearly; hours of life do not change. |
+| **risk** Replacement cost | Rs 4,500 per kVA (Rs 4,50,000 for 100 kVA), **illustrative, our assumption** | order-of-magnitude for Indian distribution units; NOT from IEEE C57.91 (only the 1,80,000 h normal life is) | Rupee figures scale linearly; hours of life do not change. Replace with the utility's own figure. |
+| Emergency hot-spot limit | 140 C | IEC 60076-7 long-time emergency loading, distribution transformers | Above it the dashboard says the model is extrapolating and no ageing or cost accrues (protection would trip). A utility whose protection trips elsewhere should change `winding.hotspot_emergency_c`. |
 | LV phase voltage nominal | 250 V line-to-neutral (433 V line-to-line) | Indian LV | Used for range checks and when voltages are absent. |
 
 ## Data and ingestion
@@ -44,6 +45,29 @@ most likely to be wrong on CPRI's data are marked **risk**.
 | Step at 6 robust sd of the detrended first difference | lowering to 5 created false steps on healthy data | Small or slow steps are missed; a missed step can cause a false cooling alarm (see results). |
 | 24 h trailing fit window | spans a full load cycle so the slope is identifiable | Detection takes at least ~17 h; an alarm can outlast its fault by up to ~25 h. |
 | Thermal noise sd 0.45 K | measured on the simulator | Real probes are probably noisier; residual-in-sd figures would shrink. |
+
+## Health index
+
+| Assumption | Why | If wrong |
+|---|---|---|
+| Index <= min(ageing, loading score) + 10 | an extreme hot-spot must drive the index near 0; a weighted mean alone cannot go below 50 | Judgement. With today's anchors a unit at exactly rated load scores 10 (ageing and loading both 0). |
+| Cooling not in the cap | its healthy scatter reaches the alarm level (slope 1.058 vs 1.06) | Including it turned the index red on 0.4 % of healthy samples. |
+
+## Live mode
+
+| Assumption | Why | If wrong |
+|---|---|---|
+| Default speed 120x (one 15-min sample every 7.5 s) | slow enough to follow on screen | At 120x a cooling fault takes ~7 min of wall time to confirm. |
+| "Simulator disconnected" when a sample is more than 5 s overdue (age > expected period + 5 s), not paused | at 120x samples are 7.5 s apart, so a bare "age > 5 s" would fire between every healthy pair | A source that slows down without stopping shows the banner. |
+| Injected overload capped at 1.5 pu | at 1.91 pu the oil reading passed 150 C, was rejected by the probe range check, and the thermal fit then made a false "instrument offset" call | Above 1.5 pu the model is far outside C57.91's validated range anyway. |
+| Probe range -20 to 150 C, voltage 0.5-1.5 pu | readings outside cannot come from a working sensor on this asset | A genuinely hotter oil (only in an extreme overload that protection would already have cleared) is shown as "reading outside the sensor's plausible range" with the load stated. |
+
+## Corrective-action catalogue
+
+| Assumption | Why | If wrong |
+|---|---|---|
+| Every material's supplier, part number and price read "to be filled from approved vendor data" | none of them came from a verifiable source | Fill from the utility's approved vendor list; `check_engineering.py` fails if a field is invented. |
+| Procedure entries with no standard say so ("no standard: the team's general maintenance practice") | honest provenance | Check against the utility's approved maintenance procedure. |
 
 ## Decision outputs
 

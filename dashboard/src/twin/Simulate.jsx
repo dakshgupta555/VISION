@@ -13,7 +13,7 @@ const fmt = (v, d = 1) => {
   if (v === null || v === undefined) return "—";
   if (typeof v !== "number") return v;
   const x = Math.abs(v) < 0.5 * 10 ** -d ? 0 : v;      // no "-0.00"
-  return x.toFixed(d);
+  return x.toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
 };
 const axis = { stroke: "var(--chart-axis)", fontSize: 14 };
 
@@ -160,9 +160,9 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
                 {r.delta.map((d) => (
                   <tr key={d.key} className="border-t border-edge">
                     <td className="py-0.5 pr-1">{d.label} <span className="text-dim">{d.unit}</span></td>
-                    <td className="text-right">{fmt(d.baseline, 2)}</td>
-                    <td className="text-right">{fmt(d.simulated, 2)}</td>
-                    <td className={`text-right ${d.delta ? "text-accent" : "text-dim"}`}>{d.delta == null ? "—" : `${d.delta > 0 ? "+" : ""}${fmt(d.delta, 2)}`}</td>
+                    <td className="text-right">{fmt(d.baseline, d.nd)}</td>
+                    <td className="text-right">{fmt(d.simulated, d.nd)}</td>
+                    <td className={`text-right ${d.delta ? "text-accent" : "text-dim"}`}>{d.delta == null ? "—" : `${d.delta > 0 ? "+" : ""}${fmt(d.delta, d.nd)}`}</td>
                   </tr>
                 ))}
               </tbody>

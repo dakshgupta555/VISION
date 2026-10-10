@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // Engineering (everything behind them). A replay cursor drives both: the twin
 // answers as of the selected instant, using only data up to it.
 
-import { api, useTheme } from "./ui.jsx";
+import { api, fmt, useTheme } from "./ui.jsx";
 import { ModeSwitch, useLive } from "./live.jsx";
 import Overview, { TimeBar, TopBar } from "./overview/Overview.jsx";
 import SimulateWorkspace from "./twin/Simulate.jsx";
@@ -74,7 +74,7 @@ export default function App() {
         </header>
         <div className="p-6 text-dim text-[15px]">
           {live.status?.has_data === false
-            ? <>No live data yet. Start the stream in a terminal: <code className="text-fg">python -m dtwin.live --speed 600</code></>
+            ? <>No live data yet. Start the stream in a terminal: <code className="text-fg">python -m dtwin.live</code> (120× real time)</>
             : live.err || "Waiting for the live stream…"}
         </div>
       </div>
@@ -107,7 +107,15 @@ function Board({ ctx, series, view, setView }) {
         </div>
       )}
       <TimeBar ctx={ctx} />
-      {ctx.stale && (
+      {mode === "live" && ctx.live.link?.disconnected && (
+        <div role="alert" className="px-6 py-2 bg-panel border-b-2 border-alarm text-[15px] text-alarm font-semibold flex items-center gap-2">
+          {ctx.live.link.backendDown ? "Backend unreachable: live data stopped" : `${ctx.live.link.who} disconnected`}
+          <span className="font-normal text-dim">
+            last sample {fmt(ctx.live.link.age, 0)} s ago, expected every {fmt(ctx.live.status?.period_s, 1)} s.
+            Showing the last values received, greyed out.</span>
+        </div>
+      )}
+      {ctx.stale && !ctx.live.link?.disconnected && (
         <div className="px-6 py-2 bg-panel border-b border-edge text-sm text-dim">
           Showing the last known state, greyed out: {ctx.live.status.reason}.
         </div>

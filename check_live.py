@@ -126,6 +126,17 @@ def main():
     except ValueError as e:
         check("contract: unknown source rejected", True, str(e))
 
+    # ---- 8 injection limits and defaults ---------------------------------------------------
+    fresh = LiveStore()
+    try:
+        fresh.inject("overload", 1.6)
+        capped = False
+    except ValueError:
+        capped = True
+    ok15 = fresh.inject("overload", 1.5)["severity"] == 1.5
+    check("overload injection capped at 1.5 pu; default speed 120x", capped and ok15 and fresh.speed == 120.0,
+          f"speed {fresh.speed}")
+
     print(f"\n  {sum(RES)} of {len(RES)} live checks passed")
     return 0 if all(RES) else 1
 

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
-import { api, axis, Card, duration, Fold, fmt, grid, LEVEL, tip, ttt, when } from "./ui.jsx";
+import { api, axis, Card, duration, Fold, fmt, grid, hrs, inr, LEVEL, tip, ttt, when } from "./ui.jsx";
 import { HELP } from "./help.js";
 
 // Engineering features. Every number comes from the engine.
@@ -55,7 +55,9 @@ export function Countdown({ s }) {
       </p>
       <p className="text-sm text-dim mt-1">
         Settles at {fmt(h.settles_at_c)} °C. Safe load here: {fmt(100 * h.safe_load_pu, 0)} %. Insulation would wear at
-        {" "}{fmt(steady.faa, 2)}× normal speed, ₹{fmt(steady.life_cost_inr_per_day, 0)} of asset value per day.
+        {" "}{fmt(steady.faa, 2)}× normal speed{steady.beyond_emergency
+          ? `; settling above ${s.countdown.emergency_hotspot_c} °C means protection would trip, so no cost is projected.`
+          : `, ${inr(steady.life_cost_inr_per_day)} of asset value per day.`}
       </p>
       <div className="mt-3"><Projection p={s.countdown.projection} hsLimit={h.limit_c} /></div>
     </Card>
@@ -84,7 +86,8 @@ export function Cooling({ s, series }) {
           <ReferenceLine y={1.06} stroke="var(--color-alarm)" strokeDasharray="6 4" ifOverflow="extendDomain"
             label={{ value: "Cooling alarm 1.06", fill: "var(--color-alarm)", fontSize: 14, position: "insideTopRight" }} />
           <ReferenceLine y={1.0} stroke="var(--chart-3)" />
-          <Line dataKey="slope" name="Cooling fit slope" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false} connectNulls />
+          <Line dataKey="slope" name="Cooling fit slope" stroke="var(--chart-1)" strokeWidth={2} dot={false} isAnimationActive={false}
+            connectNulls={false} />
         </LineChart>
       </ResponsiveContainer>
       {cool && <p className="text-sm mt-2"><b>Why: </b>{cool.why}</p>}
@@ -99,23 +102,28 @@ export function Life({ s }) {
   const row = (label, x) => (
     <tr key={label} className="border-t border-edge">
       <td className="py-1.5 text-dim">{label}</td>
-      <td className="text-right">{fmt(x.aged_h, 2)} h</td>
-      <td className="text-right">{fmt(x.real_h, 1)} h</td>
+      <td className="text-right">{hrs(x.aged_h)} h</td>
+      <td className="text-right">{hrs(x.real_h)} h</td>
       <td className={`text-right ${x.rate_pu > 1 ? "text-alarm font-semibold" : ""}`}>{fmt(x.rate_pu, 2)}×</td>
-      <td className="text-right">₹{fmt(x.inr, 0)}</td>
+      <td className="text-right">{inr(x.inr)}</td>
     </tr>
   );
   return (
-    <Fold title="Insulation life used" help={HELP.life} open
-      summary={<span className={hot ? "text-alarm" : ""}>{fmt(L.since_start.aged_h, 1)} h, ₹{fmt(L.since_start.inr, 0)} since the record began</span>}>
+    <Fold title="Insulation life used" help={HELP.life(L)} open
+      summary={<span className={hot ? "text-alarm" : ""}>{hrs(L.since_start.aged_h)} h, {inr(L.since_start.inr)} since the record began</span>}>
       <table className="w-full text-[15px]">
         <thead><tr className="text-dim text-sm"><th className="text-left font-normal">Window</th><th className="text-right font-normal">Life used</th>
           <th className="text-right font-normal">Clock time</th><th className="text-right font-normal">Wear speed</th><th className="text-right font-normal">Value</th></tr></thead>
         <tbody>{row("Last hour", L.last_1h)}{row("Last 24 h", L.last_24h)}{row("Since the record began", L.since_start)}</tbody>
       </table>
       <p className="text-sm text-dim mt-2">
-        ₹{fmt(L.replacement_cost_inr, 0)} replacement cost over {fmt(L.normal_life_hours, 0)} h rated life is ₹{fmt(L.cost_per_aged_hour_inr, 2)} per hour of life used (IEEE C57.91).
+        {inr(L.replacement_cost_inr)} assumed replacement cost (illustrative) ÷ {fmt(L.normal_life_hours, 0)} h normal
+        life (IEEE C57.91) = ₹{fmt(L.cost_per_aged_hour_inr, 2)} per hour of life used.
       </p>
+      {L.since_start.beyond_trip_h > 0 && (
+        <p className="text-sm text-alarm mt-1">{hrs(L.since_start.beyond_trip_h)} h with the hot-spot above the
+          {" "}{L.emergency_hotspot_c} °C emergency limit are not counted: protection would have tripped.</p>
+      )}
     </Fold>
   );
 }
@@ -197,7 +205,8 @@ export function WhatIf({ scenario, kva, i, s }) {
           <div className="text-[15px] space-y-1.5">
             <div>Hot-spot settles at <b className={w.steady.hotspot_c > w.hotspot.limit_c ? "text-alarm" : ""}>{fmt(w.steady.hotspot_c)} °C</b></div>
             <div>Top oil settles at {fmt(w.steady.top_oil_c)} °C</div>
-            <div>Insulation wears at <b className={w.steady.faa > 1 ? "text-alarm" : ""}>{fmt(w.steady.faa, 2)}×</b> normal speed, ₹{fmt(w.steady.life_cost_inr_per_day, 0)} per day</div>
+            <div>Insulation wears at <b className={w.steady.faa > 1 ? "text-alarm" : ""}>{fmt(w.steady.faa, 2)}×</b> normal speed{w.steady.beyond_emergency ? "" : `, ${inr(w.steady.life_cost_inr_per_day)} per day`}</div>
+            {w.steady.beyond_emergency && <div className="text-alarm font-semibold">Beyond IEC emergency limit — protection would trip; model extrapolating</div>}
             <div>Hot-spot {w.hotspot.limit_c} °C: <b>{ttt(w.hotspot) === "none" ? "not reached" : ttt(w.hotspot)}</b></div>
             <div className="text-dim">Safe load {fmt(100 * w.hotspot.safe_load_pu, 0)} %</div>
             <div className="text-dim">Existing {w.fixed.limit_c} °C setting (comparison): {ttt(w.fixed) === "none" ? "not reached" : ttt(w.fixed)}</div>

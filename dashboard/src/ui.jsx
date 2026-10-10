@@ -12,7 +12,15 @@ export const LEVEL = {
   ok: "text-ok border-ok", warn: "text-warn border-warn", alarm: "text-alarm border-alarm",
   sensor: "text-sensor border-sensor", info: "text-dim border-edge",
 };
-export const fmt = (v, d = 1) => (v === null || v === undefined || Number.isNaN(v) ? "—" : Number(v).toFixed(d));
+// Every number on the dashboard: Indian digit grouping (8,99,647), fixed decimals.
+// Conventions: rupees no decimals (inr), hours at most 1 (hrs), pu at most 2.
+export const fmt = (v, d = 1) => {
+  if (v === null || v === undefined || Number.isNaN(Number(v))) return "—";
+  const x = Math.abs(Number(v)) < 0.5 * 10 ** -d ? 0 : Number(v);          // no "-0.0"
+  return x.toLocaleString("en-IN", { minimumFractionDigits: d, maximumFractionDigits: d });
+};
+export const inr = (v) => (v === null || v === undefined ? "—" : `₹${fmt(v, 0)}`);
+export const hrs = (v) => fmt(v, 1);
 // "2026-04-22T11:00:00" -> "22 Apr, 11:00"
 const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 export const when = (iso) => (iso ? `${Number(iso.slice(8, 10))} ${MON[Number(iso.slice(5, 7)) - 1]}, ${iso.slice(11, 16)}` : "—");

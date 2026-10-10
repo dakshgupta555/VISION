@@ -65,7 +65,8 @@ def corrective_actions(rec, cat=None):
                     "indication_vs_source": e.get("indication_vs_source"),
                     "inspection": e["inspection"], "corrective": e["corrective"],
                     "qualification": e["qualification"], "safety": e.get("safety", []),
-                    "materials": e.get("materials", []), "notes": e.get("notes")})
+                    "materials": e.get("materials", []), "notes": e.get("notes"),
+                    "source": e.get("source")})
     first = out[0] if out else None
     summary = (f"{first['title']}: {first['inspection'][0]}" if first else None)
     expl = (f"{rec['component_id']} is flagged ({rec.get('state')}). Recommended first step: {first['inspection'][0]} "

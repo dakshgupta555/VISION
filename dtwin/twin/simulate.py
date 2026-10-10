@@ -149,7 +149,7 @@ DELTA_ROWS = [
     ("I0_pct_of_rated", "I0, % of rated", "%", 2), ("p_cu_w", "Copper loss", "W", 0),
     ("p_core_w", "Core loss", "W", 0), ("efficiency_pct", "Efficiency", "%", 2),
     ("steady_top_oil_c", "Top oil, steady", "°C", 1), ("steady_hotspot_c", "Hot-spot, steady", "°C", 1),
-    ("steady_faa", "Ageing factor, steady", "pu", 3), ("life_cost_inr_per_day", "Life cost", "Rs/day", 1),
+    ("steady_faa", "Ageing factor, steady", "pu", 2), ("life_cost_inr_per_day", "Life cost", "₹/day", 0),
     ("hours_to_hotspot_limit", "Hours to 110 °C hot-spot", "h", 1),
     ("hours_to_fixed_trip", "Hours to the fixed 60 °C oil trip", "h", 1),
 ]
@@ -247,7 +247,7 @@ def simulate(tw, i, inputs=None, horizon_h=24.0, step_min=10.0):
     b = _trajectory(base, base["inputs"], horizon_h, step_min)
     s = _trajectory(base, inp, horizon_h, step_min)
     expl, actions, limits = explain(base, inp, b, s)
-    delta = [{"key": k, "label": lab, "unit": u, "baseline": b["point"].get(k), "simulated": s["point"].get(k),
+    delta = [{"key": k, "label": lab, "unit": u, "nd": nd, "baseline": b["point"].get(k), "simulated": s["point"].get(k),
               "delta": (None if b["point"].get(k) is None or s["point"].get(k) is None
                         else round(s["point"][k] - b["point"][k], nd + 1))} for k, lab, u, nd in DELTA_ROWS]
     return {"label": "SIMULATED", "baseline_timestamp": base["timestamp"], "horizon_h": horizon_h,

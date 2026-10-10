@@ -48,9 +48,27 @@ Thermally upgraded paper:
 
 F_AA = 1.0 at 110 C. It halves at 103.3 C and doubles at 116.9 C: asymmetric,
 which is why a few hot hours matter more than many cool ones. Integrating
-F_AA over time gives equivalent ageing hours; dividing by the 180 000 h normal
+F_AA over time gives equivalent ageing hours; dividing by the 1,80,000 h normal
 life gives life consumed; multiplying by replacement cost / normal life gives
-its value in rupees.
+its value in rupees:
+
+    aged_h  = sum over samples of F_AA x dt                (dt in hours)
+    cost    = aged_h x (replacement cost / normal life)
+            = aged_h x (Rs 4,50,000 assumed, illustrative / 1,80,000 h, IEEE C57.91)
+            = aged_h x Rs 2.50                             (100 kVA; cost scales at Rs 4,500 per kVA)
+
+The replacement cost is OUR assumption, not a C57.91 figure; only the normal
+life is from the standard.
+
+**Physical limit.** Above a hot-spot of 140 C (IEC 60076-7 long-time
+emergency limit for distribution transformers, `config/components.yaml`
+`winding.hotspot_emergency_c`) protection would trip and the unit would be
+de-energised. Samples above it add **no** aged hours and no cost, and the
+dashboard says "Beyond IEC emergency limit — protection would trip; model
+extrapolating". Life used therefore cannot exceed what the asset could
+physically experience; the hours not counted are reported (`beyond_trip_h`).
+The C57.91 equations themselves are unchanged and still extrapolate above 140 C
+for the projection and what-if, where the result is labelled the same way.
 
 ## 3. Unbalance from magnitudes only
 
@@ -137,13 +155,39 @@ Weights are a stated judgement: ageing and cooling consume insulation life;
 unbalance is weighted lowest because its heating already reaches the ageing
 component through the worst-phase hot-spot.
 
+    score_i = clip(100 x (bad_i - x_i) / (bad_i - good_i), 0, 100)   (x = log2 F_AA for ageing)
+    mean    = sum(w_i score_i) / sum(w_i)       over components with a value
+    index   = min(mean, min(score_ageing, score_loading) + 10)
+
+**Cap.** A weighted mean alone cannot fall below 50 while cooling, integrity
+and unbalance stay at 100, even with a 200 C hot-spot. So the index may not
+exceed the worse of the two safety-critical scores, ageing and loading, by
+more than 10. Measured on every scenario: the cap never binds on
+`healthy.csv`; it binds on 3.9 % of `summer_overload.csv` samples. Cooling is
+deliberately NOT in the cap: the healthy slope's scatter reaches 1.058 against
+the 1.06 alarm, and including it turned the index red on 0.4 % of healthy
+samples. Each component is still shown on its own, and the dashboard says
+when the cap holds the index down.
+
+Consequence to know: at exactly rated load and 30 C ambient the hot-spot is
+110.0 C, so ageing and loading both score 0; the weighted mean is 50 and the
+index is held at 10. Whether rated load should score that low is an open
+decision (see results.md, "Health index at rated load").
+
 ## 6. Decision outputs
 
 - **Time to trip.** Project the twin forward from its present state, holding
   load and ambient, using its own estimate of the cooling factor (the fit
   slope when the cooling alarm stands). The **twin's limit** is the hot-spot at
   110 C; only it produces a load-shed instruction, with the shed computed as
-  the largest load whose steady hot-spot stays under the limit. The existing
+  the largest load whose steady hot-spot stays under the limit:
+
+      safe K = max K such that  ambient + cf x dTO_u(K) + dHS_u(K x K_w/K_o) <= 110 C   (bisection)
+      shed % = 100 x (1 - safe K / K now)
+
+  An overload alarm and this projection produce ONE action ("Shed X% of load
+  to bring the hot-spot back under 110 C"), with the settling temperature on
+  its own line ("If nothing changes it settles at Y C"). The existing
   **60 C oil trip** is projected too, shown as a comparison only.
 - **Ambient-compensated protection.** At each ambient, the steady load a fixed
   60 C oil trip permits, a rise-over-ambient trip of 30 K permits (the
@@ -154,7 +198,53 @@ component through the worst-phase hot-spot.
   simulated record for the selected nameplate and report the smallest one the
   twin detects.
 
-## 7. How detection is scored
+## 7. Equivalent circuit (dtwin/physics/circuit.py)
+
+Per-phase T circuit referred to HV, three-phase unit on its star equivalent
+(V_ph = V_LL / sqrt3, a = V1_ph / V2_ph, impedances referred by a^2):
+
+    V1 --R1--jX1--+--R2'--jX2'-- a V2,   magnetising branch Rc || jXm at E1
+
+From nameplate percentages (illustrative unless test data are given):
+
+    Z_base = V1_ph^2 / (S / 3);  Zeq = z% x Z_base;  Req = (P_cu / 3) / I1^2;  Xeq = sqrt(Zeq^2 - Req^2)
+    Rc = V1_ph^2 / (P_core / 3);  Ic = V1_ph / Rc;  Im = sqrt(I0^2 - Ic^2);  Xm = V1_ph / Im
+
+Open-circuit test (LV or HV side): Rc = V^2 / P0, Ic = P0 / V, Im = sqrt(I0^2 - Ic^2), Xm = V / Im.
+Short-circuit test: Req = Psc / I^2, Zeq = Vsc / I, Xeq = sqrt(Zeq^2 - Req^2).
+Solved with phasors; losses P_cu = 3 |I1|^2 R1 + 3 |I2|^2 R2, P_core = 3 |E1|^2 / Rc;
+efficiency = P_out / (P_out + P_cu + P_core); regulation = (V2_no-load - V2) / V2;
+maximum efficiency at K = sqrt(P_core / P_cu,rated).
+
+Link to the thermal model: rated core loss = rated copper loss / R, so
+(P_cu + P_core) / rated total = (K^2 R + 1) / (R + 1), exactly the C57.91 term
+(`check_circuit.py` tests it). Thermal RC of the oil: Rth = rated top-oil rise
+/ rated total loss, Cth = tau_oil / Rth, rise_ult = cf x rise_R x
+(P_total / P_total,R)^n. The Simulate page runs the what-if through this
+loss-driven form.
+
+## 8. Magnetic characteristics (dtwin/physics/magnetic.py)
+
+    B_max = V / (4.44 f N1 A_core)
+    i_m(t) = [H(B(t)) l_core + B(t) g / mu0] / N1,   I_m = RMS(i_m),   I_c = V / Rc,   I0 = sqrt(I_m^2 + I_c^2)
+
+B-H curve of CRGO steel, N1, A_core, l_core and the joint gap g are
+ILLUSTRATIVE. Hysteresis is not modelled.
+
+## 9. Winding temperature field (dtwin/physics/fem.py)
+
+Steady conduction, 2D axisymmetric (r, z), one phase leg, P1 triangles (scikit-fem):
+
+    -div(k grad T) = q,     q = per-phase I^2 R / block volume
+    -k dT/dn = h (T - T_oil(z)) on every face touching oil,  T_oil linear from bottom to top oil
+    homogenised blocks:  k_z = sum(f_i k_i),  k_r = 1 / sum(f_i / k_i)
+
+h is calibrated once so the rated FEM winding-to-oil gradient equals the rated
+gradient; nothing else is fitted. No oil flow (no CFD); geometry and materials
+are illustrative (`config/fem.yaml`, each value sourced). The FEM never drives
+an alarm; C57.91 does (`check_fem.py`).
+
+## 10. How detection is scored
 
 `evaluate.py` is the only reader of the truth files. Per fault event:
 detected (the correct diagnosis appeared), **severity at detection** as a

@@ -146,3 +146,49 @@ At 48 C ambient the existing device trips with no load at all.
 | Independent "report both" slope/intercept classifier | 25.5 % false sensor calls on oil loss in-sample; failed `check_time_term.py` |
 | Split-window step scan (pre-registered, `results/prereg_split_step.md`) | cut wrong-family cooling alarms 66 % on a development set but raised in-sample false alarms from 0.00 % to 0.16 %, failing its pre-set rule; shipped switched off |
 | DGA, Duval triangle, harmonic derating | no dissolved-gas or harmonic data exists |
+
+## Health index at rated load (open decision, not applied)
+
+At exactly rated load and 30 C ambient, balanced, cooling as designed, the
+hot-spot is 110.0 C and F_AA = 1.000. Ageing scores 0 (its 0 is F_AA = 1.0) and
+loading scores 0 (its 0 is the 1.00 pu overload alarm).
+
+| Mapping | Ageing | Loading | Weighted mean | Index |
+|---|---|---|---|---|
+| As shipped (cap on ageing and loading) | 0 | 0 | 50 | **10** |
+| Before phase 4b (no cap) | 0 | 0 | 50 | 50 |
+| P1: ageing 100 at F_AA 1/8, 0 at F_AA 2.71 (120 C) | 32 | 0 | 60 | 10 |
+| P2: ageing 100 at F_AA 0.5 (103 C), 0 at 2.71 (120 C) | 59 | 0 | 68 | 10 |
+| P2 + loading 100 at 0.8, 0 at 1.2 pu | 59 | 50 | 78 | 60 |
+| P2, cap on ageing only | 59 | 0 | 68 | 68 |
+
+Proposed (consistent with the 120 C hot-spot alarm in `config/components.yaml`
+and with "0 exactly where the alarm fires"): **P2**, ageing 0 at the 120 C
+alarm, 100 at half the rated wear rate. With P2 a 30 C-ambient unit scores
+ageing 100 up to 0.9 pu (hot-spot 99 C), 59 at 1.0 pu, 0 from 1.1 pu (122 C).
+Because loading is in the cap, rated load still reads 10 under P2 unless the
+cap is on ageing only or loading's anchors move too; that choice is the
+team's.
+
+## Live fault check — `python check_live_faults.py` (120x, Inject-panel defaults)
+
+Each fault on its own fresh backend and simulator with 48 h of healthy
+prewarm; no alerts before injection in any run. Time to detect is
+transformer-hours of record time from injection to the first live sample
+showing the alert. Output: `results/live_faults.json`.
+
+| Fault (severity, ramp) | Detected | Family | Time to detect | 3D colour change | Clears after |
+|---|---|---|---|---|---|
+| Cooling degradation (0.3, 24 h) | yes, "Cooling path degraded" | asset | 16.8 h | radiators green -> red (rise 10 % above load and ambient); conservator grey -> amber (low oil is one possible cause) | 4.0 h |
+| Oil loss (0.3, 72 h) | yes, "Cooling path degraded" | asset | 29.8 h | as cooling (rise 7 % above) | 6.0 h |
+| Overload (1.25 pu, 1 h) | yes, "Overload" at 111 % | asset | 0.25 h (one sample) | all six windings green -> red (phase current 109-114 % of rated) | 0.25 h |
+| Phase unbalance (0.12, 24 h) | yes, "Phase load unbalance growing" | asset | 7.3 h | B-phase LV and HV windings green -> amber (carries the unbalance) | 0.5 h |
+| Oil probe drift (5 K, 24 h) | yes, "Temperature instrument offset" | sensor | 13.8 h (a "Thermal model mismatch" warning showed from 10.8 h) | oil probe green -> violet, monitoring device green -> violet, oil green -> grey (untrusted) | 1.0 h |
+| Stuck Y current | yes, "Y-phase current reading frozen" | sensor | 1.0 h | Y windings green -> grey, monitoring device green -> violet | 0.25 h |
+| Dead B current | yes, "B-phase current reading missing" | sensor | 0.25 h | B windings green -> grey, monitoring device green -> violet | 0.25 h |
+
+The 1.91 pu overload of an earlier review, reproduced offline: the top-oil
+reading passed 150 C 5.5 h after onset and the probe range check
+(`temp_range_c`, -20 to 150 C) rejected it; the thermal fit then raised a
+false "Temperature instrument offset". At the new 1.5 pu cap neither happens
+(oil peaks at 141 C).
