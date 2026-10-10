@@ -15,6 +15,7 @@ run time-term python check_time_term.py
 [ -f check_twin.py ] && run twin python check_twin.py
 [ -f check_engineering.py ] && run engineering python check_engineering.py
 [ -f check_simulate.py ] && run simulate python check_simulate.py
+[ -f check_restart.py ] && run restart python check_restart.py
 tmp="$(mktemp)"; python evaluate.py --set heldout > "$tmp" 2>&1
 if diff -q "$tmp" results/heldout_detector_370b0b3.txt >/dev/null; then
   printf "  %-14s %s\n" "held-out" "byte-identical to results/heldout_detector_370b0b3.txt"

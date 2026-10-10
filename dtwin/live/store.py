@@ -32,6 +32,8 @@ from .sim import ASSET_KINDS, CHANNELS, SENSOR_KINDS
 CONTRACT_FIELDS = {"timestamp", "transformer_id", "source", *CHANNELS}
 SOURCES = {"simulator", "sensor"}
 MAX_BUFFER_DAYS = 7.0
+HISTORY_H = 48.0                   # what a prewarm supplies; below it the dashboard says so
+SESSION = uuid.uuid4().hex[:12]    # one per backend process: a change tells the source to re-prewarm
 STALE_PERIODS = 3
 
 
@@ -73,6 +75,7 @@ class LiveStore:
             self.prewarm_until = None
             self.twin = None
             self.analysis_ms = None
+            self.analysis_error = None
             self.faults = {}               # injection list - simulator only
             self.paused = False
             self.speed = 600.0
@@ -81,20 +84,37 @@ class LiveStore:
     # ---- ingest -----------------------------------------------------------------
     def add(self, samples, prewarm=False, period_s=None):
         """Append samples (dicts in the live contract), then re-run the
-        analytics once. Returns the number accepted."""
-        n = 0
-        with self.lock:
-            for s in samples:
-                src = s.get("source", "simulator")
-                if src not in SOURCES:
-                    raise ValueError(f"source must be one of {sorted(SOURCES)}")
+        analytics once. Returns the number accepted.
+
+        A malformed sample (bad source, timestamp or number) raises ValueError
+        and nothing in the batch is stored. A well-formed sample is ALWAYS
+        stored: if the analytics then fail, the error is kept in
+        analysis_error and the previous twin stays in place."""
+        parsed = []
+        for s in samples:
+            if not isinstance(s, dict):
+                raise ValueError("each sample must be a JSON object")
+            src = s.get("source", "simulator")
+            if src not in SOURCES:
+                raise ValueError(f"source must be one of {sorted(SOURCES)}")
+            if "timestamp" not in s:
+                raise ValueError("timestamp missing")
+            try:
                 ts = pd.Timestamp(s["timestamp"])
-                if ts.tzinfo is not None:
-                    ts = ts.tz_localize(None)
-                self.rows[ts] = {c: (np.nan if s.get(c) is None else float(s[c])) for c in CHANNELS}
+                vals = {c: (np.nan if s.get(c) is None else float(s[c])) for c in CHANNELS}
+            except (TypeError, ValueError) as e:
+                raise ValueError(str(e)) from None
+            if ts is pd.NaT:
+                raise ValueError("timestamp not a date")
+            if ts.tzinfo is not None:
+                ts = ts.tz_localize(None)
+            parsed.append((ts, vals, src, s.get("transformer_id")))
+        with self.lock:
+            for ts, vals, src, tag in parsed:
+                self.rows[ts] = vals
                 self.source = src
-                self.tag = s.get("transformer_id") or self.tag
-                n += 1
+                self.tag = tag or self.tag
+            n = len(parsed)
             if not n:
                 return 0
             if prewarm:
@@ -104,11 +124,30 @@ class LiveStore:
             if period_s:
                 self.declared_period_s = float(period_s)
             self._trim()
+            self.version += 1
+            if len(self.rows) < 2:
+                self.analysis_error = "insufficient history: fewer than 2 samples"
+                return n
             t0 = time.perf_counter()
-            self.twin = analyse(self.frame(), self.rating_kva, self.source, self.tag)
+            try:
+                self.twin = analyse(self.frame(), self.rating_kva, self.source, self.tag)
+                self.analysis_error = None
+            except Exception as e:                       # keep the sample, report, keep serving
+                self.analysis_error = f"{type(e).__name__}: {e}"
             self.analysis_ms = round(1000 * (time.perf_counter() - t0), 1)
             self.version += 1
         return n
+
+    def history(self):
+        """How much of the 48 h the detectors want is in the buffer."""
+        need = None
+        if len(self.rows) >= 2:
+            idx = sorted(self.rows)
+            step_s = float(np.median(np.diff(np.array(idx, dtype="datetime64[ns]")).astype("timedelta64[s]").astype(float)))
+            if step_s > 0:
+                need = int(round(HISTORY_H * 3600 / step_s))
+        n = len(self.rows)
+        return {"n": n, "need": need, "rebuilding": need is None or n < need}
 
     def _trim(self):
         if not self.rows:
@@ -135,7 +174,8 @@ class LiveStore:
     def freshness(self):
         with self.lock:
             if not self.arrivals and self.twin is None:
-                return {"has_data": False, "stale": True, "reason": "no data received"}
+                return {"has_data": False, "stale": True, "reason": "no data received",
+                        "session": SESSION, "history": self.history(), "analysis_error": self.analysis_error}
             last = self.arrivals[-1] if self.arrivals else None
             age = None if last is None else self.clock() - last
             per = self.period_s()
@@ -154,6 +194,7 @@ class LiveStore:
                     "last_sample": None if not self.rows else max(self.rows).isoformat(),
                     "prewarm_until": None if self.prewarm_until is None else self.prewarm_until.isoformat(),
                     "n_samples": len(self.rows), "analysis_ms": self.analysis_ms,
+                    "analysis_error": self.analysis_error, "history": self.history(), "session": SESSION,
                     "speed": self.speed, "paused": self.paused, "version": self.version}
 
     # ---- injection list (simulator only) -------------------------------------------
@@ -184,4 +225,5 @@ class LiveStore:
 
     def sim_config(self):
         with self.lock:
-            return {"faults": list(self.faults.values()), "paused": self.paused, "speed": self.speed}
+            return {"faults": list(self.faults.values()), "paused": self.paused, "speed": self.speed,
+                    "session": SESSION}

@@ -70,6 +70,13 @@ export function LiveBar({ status }) {
       <button className="border border-edge rounded px-2 py-1" onClick={() => control({ paused: !st.paused })}>
         {st.paused ? "Resume" : "Pause"}
       </button>
+      {st.has_data && st.history?.rebuilding && (
+        <span className="border border-warn text-warn rounded px-2 py-1 num"
+          title="The 24 h rise fit and the persistence rules need history. They fill in as samples arrive; a restarted simulator re-sends it automatically.">
+          History rebuilding ({st.history.n}/{st.history.need ?? 192})
+        </span>
+      )}
+      {st.analysis_error && <span className="text-warn num" title={st.analysis_error}>analysis paused: {st.analysis_error.slice(0, 60)}</span>}
       {st.stale && <span className="text-dim">● {st.reason}</span>}
       {!st.has_data && <span className="text-dim">Start the stream: <span className="num">python -m dtwin.live --speed 600</span></span>}
       <span className="ml-auto text-dim num">analysis {st.analysis_ms ?? "—"} ms · {st.n_samples ?? 0} samples</span>

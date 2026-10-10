@@ -246,8 +246,11 @@ def cross_phase(df, bad, cfg: ValidationConfig, volts_known=True):
     # A call must persist before it stands. At the instant a feeder is
     # rebalanced the trailing medians disagree for a sample or two, which would
     # otherwise read as a CT fault.
-    dt_h = np.median(np.diff(df.index.values).astype("timedelta64[s]").astype(float)) / 3600.0
-    need = max(1, int(round(cfg.elec_persist_h / dt_h)))
+    # A buffer of one row (a live stream just restarted) has no time step:
+    # nothing can persist yet, so nothing is suppressed.
+    dt_h = np.median(np.diff(df.index.values).astype("timedelta64[s]").astype(float)) / 3600.0 \
+        if len(df) > 1 else np.nan
+    need = max(1, int(round(cfg.elec_persist_h / dt_h))) if np.isfinite(dt_h) and dt_h > 0 else 1
     for val in set(status) - {"ok"}:
         for s, e in _runs(status == val):
             if e - s + 1 < need:
@@ -300,6 +303,8 @@ def rolling_rise_fit(index, pred_rise, meas_rise, valid, cfg: ValidationConfig,
     # never more than fit_min_points (unchanged at 45-min cadence or finer)
     step_min = float(np.median(np.diff(index.values).astype("timedelta64[s]").astype(float))) / 60.0 \
         if len(index) > 1 else 15.0
+    if not np.isfinite(step_min) or step_min <= 0:
+        step_min = 15.0
     min_pts = min(cfg.fit_min_points, max(8, int(0.75 * cfg.fit_window_h * 60.0 / step_min)))
     times = pd.date_range(index[0] + win, index[-1], freq=pd.Timedelta(hours=cfg.fit_step_h))
     reset_pos = np.where(resets)[0] if resets is not None else np.array([], int)

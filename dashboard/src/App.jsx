@@ -103,9 +103,9 @@ function Replay({ tl, i, n, setI, playing, setPlaying, speed, setSpeed }) {
 }
 
 // ---------------------------------------------------------------- 2. gauges
-function Tile({ label, value, unit, sub, b }) {
+function Tile({ label, value, unit, sub, b, tip }) {
   return (
-    <div className={`bg-ink border rounded p-2 ${b ? BORDER[b] : "border-edge"} ${b && b !== "ok" ? "border-2" : ""}`}>
+    <div title={tip} className={`bg-ink border rounded p-2 ${b ? BORDER[b] : "border-edge"} ${b && b !== "ok" ? "border-2" : ""}`}>
       <div className={`text-[10px] uppercase tracking-widest ${b && b !== "ok" ? TEXT[b] : "text-dim"}`}>{label}</div>
       <div className={`num text-2xl ${b && b !== "ok" ? TEXT[b] : ""}`}>{value}<span className="text-sm text-dim ml-1">{unit}</span></div>
       {sub && <div className="num text-[11px] text-dim">{sub}</div>}
@@ -128,7 +128,8 @@ function Gauges({ s }) {
         <Tile label="Current unbalance" value={fmt(r.current_unbalance_pct)} unit="%" b={sc.unbalance}
           sub={`VUF ${fmt(r.voltage_unbalance_pct, 2)} %`} />
         <Tile label="Ageing factor" value={fmt(r.faa, 2)} unit="pu" sub={`last 24 h: ${fmt(s.ageing_24h.equivalent_hours, 1)} h · ₹${fmt(s.ageing_24h.life_cost_inr, 0)}`} b={sc.ageing} />
-        <Tile label="Rise fit" value={fmt(r.slope, 3)} unit="slope" sub={`intercept ${fmt(r.intercept_k, 2)} K`} b={sc.cooling} />
+        <Tile label="Rise fit" value={fmt(r.slope, 3)} unit="slope" sub={`excess rise now ${fmt(r.excess_rise_k, 2)} K`} b={sc.cooling}
+          tip="Measured oil rise minus slope × predicted rise, at this instant. Near 0 healthy; a steady offset points at the probe, a slope off 1 at the transformer." />
       </div>
       <div className="mt-2 grid grid-cols-2 gap-2 num text-xs">
         <div className="text-dim">I&nbsp; {["IR", "IY", "IB"].map((c) => `${c} ${fmt(r.currents_a[c])}`).join("  ")} A</div>

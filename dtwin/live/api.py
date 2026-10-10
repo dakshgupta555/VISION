@@ -24,7 +24,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 from . import notify as live_notify
-from .store import LiveStore
+from .store import SESSION, LiveStore
 
 STORE = LiveStore()
 router = APIRouter(prefix="/api/live")
@@ -39,19 +39,31 @@ def live_state(tw, t=None):
 
 @router.post("/sample")
 async def post_sample(request: Request):
-    body = await request.json()
+    """422 only for a malformed sample. A well-formed sample is stored even if
+    the analytics then fail; the reply says so in analysis_error."""
+    try:
+        body = await request.json()
+    except ValueError:
+        raise HTTPException(422, "sample rejected: body is not JSON")
     if isinstance(body, dict) and "samples" in body:
         samples, prewarm, period = body["samples"], bool(body.get("prewarm")), body.get("period_s")
     else:
         samples, prewarm, period = (body if isinstance(body, list) else [body]), False, None
         if isinstance(body, dict):
             period = body.get("period_s")
+    if not isinstance(samples, list):
+        raise HTTPException(422, "sample rejected: samples must be a list")
     try:
         n = await asyncio.to_thread(STORE.add, samples, prewarm, period)
     except (ValueError, KeyError) as e:
         raise HTTPException(422, f"sample rejected: {e}")
-    await asyncio.to_thread(live_notify.notify, STORE.twin)       # outbox only
-    return {"accepted": n, "analysis_ms": STORE.analysis_ms, "version": STORE.version}
+    if STORE.twin is not None and STORE.analysis_error is None:
+        try:
+            await asyncio.to_thread(live_notify.notify, STORE.twin)      # outbox only
+        except Exception as e:                                         # never lose a sample to a notifier
+            STORE.analysis_error = f"notify: {type(e).__name__}: {e}"
+    return {"accepted": n, "analysis_ms": STORE.analysis_ms, "version": STORE.version,
+            "analysis_error": STORE.analysis_error, "history": STORE.history(), "session": SESSION}
 
 
 @router.get("/status")

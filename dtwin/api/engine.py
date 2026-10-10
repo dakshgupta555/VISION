@@ -385,6 +385,8 @@ class Twin:
                 "current_unbalance_pct": _f(row.current_unbalance_pct, 1),
                 "voltage_unbalance_pct": _f(row.voltage_unbalance_pct, 2),
                 "faa": _f(row.faa, 3), "slope": _f(row.slope, 3), "intercept_k": _f(row.intercept, 2),
+                # fit evaluated now: t = 0 at the window end, so the drift term adds c*0
+                "excess_rise_k": _f(row.intercept + row.drift_k_per_day * 0.0, 2),
                 "currents_a": {c: _f(self.df[c].iloc[i], 1) for c in ("IR", "IY", "IB")},
                 "voltages_v": {c: _f(self.df[c].iloc[i], 1) for c in ("VR", "VY", "VB")},
                 "channels": {c: row[f"ch_{c}"] for c in CHANNELS},

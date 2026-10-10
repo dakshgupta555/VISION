@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .engine import get_twin, scenarios, selftest
+from ..live.store import SESSION as _LIVE_SESSION
 from ..physics.nameplate import IS_1180_RATINGS
 
 def _load_dotenv(path=Path(__file__).resolve().parents[2] / ".env"):
@@ -38,7 +39,29 @@ def _load_dotenv(path=Path(__file__).resolve().parents[2] / ".env"):
 _load_dotenv()
 
 app = FastAPI(title="Distribution Transformer Digital Twin", version="0.3")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
+                   expose_headers=["X-Dtwin-Session"])
+
+
+class _SessionHeader:
+    """Every response carries the backend's session id (pure ASGI, so the SSE
+    stream is not buffered). A source that sees it change re-sends its history."""
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
+
+        async def send_h(msg):
+            if msg["type"] == "http.response.start":
+                msg.setdefault("headers", [])
+                msg["headers"] = list(msg["headers"]) + [(b"x-dtwin-session", _LIVE_SESSION.encode())]
+            await send(msg)
+        return await self.app(scope, receive, send_h)
+
+
+app.add_middleware(_SessionHeader)
 
 
 def _twin(name, kva=None):
