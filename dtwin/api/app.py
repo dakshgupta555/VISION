@@ -242,6 +242,24 @@ async def simulate_route(name: str, request: Request, kva: Optional[float] = Non
     return simulate(tw, i, body.get("inputs") or {}, horizon_h=float(body.get("horizon_h", 24)))
 
 
+@app.get("/api/{name}/fem")
+def fem_route(name: str, t: Optional[str] = None, kva: Optional[float] = None):
+    """Per-phase FEM winding temperature field at the cursor."""
+    from ..twin.fem_view import at_cursor
+    tw = _twin(name, kva)
+    return at_cursor(tw, tw.locate(_cursor(t)))
+
+
+@app.post("/api/{name}/fem/simulate")
+async def fem_simulate_route(name: str, request: Request, kva: Optional[float] = None):
+    """Baseline, simulated and difference FEM fields for a what-if. Read-only."""
+    from ..twin.fem_view import what_if
+    body = await request.json()
+    tw = _twin(name, kva)
+    i = tw.locate(_cursor(str(body["t"])) if body.get("t") is not None else None)
+    return what_if(tw, i, body.get("inputs") or {})
+
+
 @app.get("/api/{name}/curves")
 def curves_route(name: str, kva: Optional[float] = None, n1: Optional[float] = None, area_cm2: Optional[float] = None,
                  path_m: Optional[float] = None, gap_mm: Optional[float] = None, load_pct: float = 100.0,

@@ -335,7 +335,9 @@ class PhaseLeg:
             d = {"current_a": round(float(i), 2), "load_pu": round(float(i) / self.np_.rated_current_a, 4),
                  "hotspot": {k: (round(v, 4) if isinstance(v, float) else v) for k, v in hs.items()},
                  "mean_winding_c": round(tw, 3), "mean_oil_c": round(to, 3), "gradient_k": round(g, 4),
-                 "H": round((hs["c"] - top_oil_c) / g, 4) if g > 1e-6 else None,
+                 # H = (hot-spot - top oil) / g is a rated-load quantity: at light load the
+                 # prescribed oil profile can sit above the winding top and H loses meaning
+                 "H": round((hs["c"] - top_oil_c) / g, 4) if g > 1e-6 and i >= 0.5 * self.np_.rated_current_a else None,
                  "heat_w": round(gen, 3), "heat_out_w": round(out, 3),
                  "blocks": {}}
             for n, b in self.blocks.items():
@@ -379,6 +381,7 @@ def leg_for(np_: Nameplate, conductor=None) -> PhaseLeg:
     key = (np_.rating_kva, np_.hv_kv, np_.lv_v, np_.top_oil_rise_rated_k, np_.loss_ratio_R, conductor)
     if key not in _LEGS:
         _LEGS[key] = PhaseLeg(np_, conductor=conductor)
+        _LEGS[key].h                    # calibrate now, so solve times are solve times
     return _LEGS[key]
 
 
