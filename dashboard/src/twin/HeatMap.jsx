@@ -8,6 +8,7 @@ import { hotspotColor } from "./states.js";
 
 const MM = 1000;
 const nice = (span) => [0.5, 1, 2, 5, 10, 20].find((s) => span / s <= 12) || 50;
+const kfmt = (k) => k.toFixed(k >= 10 ? 0 : 2);
 const f1 = (v) => (v === null || v === undefined ? "—" : Number(v).toFixed(1));
 
 // difference maps: cooler blue, unchanged grey, hotter orange
@@ -358,8 +359,8 @@ export default function HeatMapView({ fem, onResolve, live }) {
             calibrated once to a rated mean-winding to mean-oil gradient of {fem.calibration.g_rated_k} K and then frozen.
             LV foil conducts along its height (layers in parallel); the HV wire winding does not (turn insulation in series).</p>
           <p className="text-dim tabular-nums">Oil: {f1(fem.oil.bottom_c)} °C at the bottom to {f1(fem.oil.top_c)} °C top oil (C57.91 at this
-            instant); {fem.oil.assumption}. Conductor {fem.materials.conductor}; homogenised k_r / k_z: LV {fem.materials.k.lv.kr.toFixed(2)} / {fem.materials.k.lv.kz.toFixed(0)},
-            HV {fem.materials.k.hv.kr.toFixed(2)} / {fem.materials.k.hv.kz.toFixed(0)} W/mK.</p>
+            instant); {fem.oil.assumption}. Conductor {fem.materials.conductor}; homogenised k_r / k_z: LV {fem.materials.k.lv.kr.toFixed(2)} / {kfmt(fem.materials.k.lv.kz)},
+            HV {fem.materials.k.hv.kr.toFixed(2)} / {kfmt(fem.materials.k.hv.kz)} W/mK.</p>
         </div>
         <div>
           <div className="text-xs font-semibold text-fg mb-1">Limits</div>
