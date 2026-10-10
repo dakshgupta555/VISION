@@ -38,6 +38,10 @@ from . import geo, risk as riskmod
 
 EPS_COST = 1e-9          # per rupee
 EPS_MOVE = 1e-3          # per installed node moved to another gateway
+KEEP = 1000.0            # reward for keeping an installed node connected: above the most one
+                         # freed slot could gain (one node, risk <= 100), small enough that the
+                         # solver's optimality gap stays far below a risk point
+MIP_OPTIONS = {"disp": False, "presolve": True, "mip_rel_gap": 1e-9}
 
 
 def rupees(v):
@@ -137,14 +141,14 @@ def solve(fleet, budget, node_scale=1.0, gw_scale=1.0, radius_scale=1.0, risks=N
             a[nT + nG + p] = 1
         rows.append(a); lo.append(-np.inf); hi.append(m.cap[g.id])
     lb, ub = np.zeros(n), np.ones(n)
-    lost = []
     for i, t in enumerate(T):
         if t.monitored:
-            if by_t[i]:
-                lb[i] = 1                                 # installed nodes stay
-            else:
+            # installed nodes stay whenever range and capacity allow: a reward far
+            # above any risk total, not a hard constraint, so the program is always
+            # feasible and a node that cannot be placed is reported, not hidden
+            c[i] -= KEEP
+            if not by_t[i]:
                 ub[i] = 0
-                lost.append(t.id)
     for j, g in enumerate(G):
         if g.existing:
             lb[nT + j] = 1                                # existing gateways are built
@@ -161,22 +165,24 @@ def solve(fleet, budget, node_scale=1.0, gw_scale=1.0, radius_scale=1.0, risks=N
         for idx in groups.values():
             a = A(); a[idx] = 1
             rows.append(a); lo.append(-np.inf); hi.append(1)
-        c[:nT] = np.where([not t.monitored for t in T], -(1000.0 + r), 0.0) + EPS_COST * cn
+        unm = np.array([not t.monitored for t in T])
+        c[:nT] = np.where(unm, -(1000.0 + r) + EPS_COST * cn, c[:nT])     # installed nodes keep their reward
         cap_budget = np.inf
     if force is not None:
         for i, t in enumerate(T):
             if not t.monitored:
                 lb[i] = ub[i] = 1.0 if t.id in force else 0.0
-        c[:nT] = 0.0
+        c[:nT] = np.where([not t.monitored for t in T], 0.0, c[:nT])
         cap_budget = np.inf
     a = A(); a[:nT] = cn; a[nT:nT + nG] = cg              # budget
     rows.append(a); lo.append(-np.inf); hi.append(cap_budget)
     res = milp(c, constraints=LinearConstraint(np.array(rows), lo, hi), integrality=np.ones(n),
-               bounds=Bounds(lb, ub), options={"disp": False, "presolve": True})
+               bounds=Bounds(lb, ub), options=MIP_OPTIONS)
     if res.status != 0 or res.x is None:
         return {"feasible": False, "kind": "optimised", "budget": float(budget),
                 "message": f"No feasible plan under these assumptions: the solver reported '{res.message}'."}
     x = np.round(res.x).astype(int)
+    lost = [T[i].id for i in range(nT) if T[i].monitored and not x[i]]
     nodes = [T[i].id for i in range(nT) if x[i] and not T[i].monitored]
     assign = {T[i].id: G[j].id for p, (i, j) in enumerate(P) if x[nT + nG + p]}
     opened = [G[j].id for j in range(nG) if x[nT + j] and not G[j].existing]

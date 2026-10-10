@@ -138,7 +138,7 @@ function TransformerPanel({ id, geo, plan, dev, risk, onClose, onOpenAsset }) {
         <tbody>
           {pairs.map((p) => (
             <tr key={p.gateway} className="border-t border-edge align-top">
-              <td className="py-1 font-semibold">{p.gateway}</td>
+              <td className="py-1 font-semibold whitespace-nowrap">{p.gateway}</td>
               <td className="text-right whitespace-nowrap">{fmt(p.distance_m / 1000, 2)} km</td>
               <td className={`pl-2 font-semibold ${p.feasible ? "text-ok" : "text-dim"}`}>{p.feasible ? "yes" : "no"}</td>
               <td className="pl-2 text-sm text-dim">{p.why}</td>
@@ -454,7 +454,7 @@ export default function MapView({ live, theme, onOpenAsset, onDemo = () => {} })
                 return (
                   <Marker key={g.id} position={[g.lat, g.lon]} icon={gwIcon(kind, g.id, C, g.existing && st && st !== "online" && st !== "no data")}
                     eventHandlers={{ click: () => setSel({ type: "gateway", id: g.id }) }}>
-                    <Tooltip direction="top" offset={[0, -14]} permanent>{g.id}{kind === "planned" ? " (planned)" : kind === "candidate" ? " (candidate)" : ""}</Tooltip>
+                    <Tooltip direction="top" offset={[0, -14]} permanent interactive>{g.id}{kind === "planned" ? " (planned)" : kind === "candidate" ? " (candidate)" : ""}</Tooltip>
                   </Marker>
                 );
               })}

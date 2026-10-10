@@ -46,6 +46,21 @@ if (demoStep) {
     await page.getByText(`Demo ${k} of 6`).waitFor({ timeout: 60000 });
   }
 }
+const gwClick = arg("gateway", null);            // map: click this gateway, optionally --radius <km>
+if (gwClick) {
+  await page.waitForTimeout(1500);
+  await page.locator(".leaflet-marker-icon").filter({ has: page.locator(`[title="${gwClick}"]`) }).first().click({ force: true });
+  await page.getByText(`Gateway ${gwClick}`).waitFor({ timeout: 10000 });
+  const r = arg("radius", null);
+  if (r) {
+    const t0 = Date.now();
+    const before = await page.getByText(/solved in \d+ ms/).first().textContent().catch(() => "");
+    await page.getByLabel("Assumed radius km").fill(r);
+    await page.waitForFunction((b) => { const el = [...document.querySelectorAll("span")].find((s) => /solved in \d+ ms/.test(s.textContent));
+      return el && el.textContent !== b; }, before, { timeout: 10000 }).catch(() => {});
+    console.log(`radius edit -> re-solved and redrawn in ${Date.now() - t0} ms (incl. 120 ms debounce)`);
+  }
+}
 if (budget) {
   await page.waitForSelector("input[type=range]");
   await page.$eval("input[type=range]", (el, v) => {
