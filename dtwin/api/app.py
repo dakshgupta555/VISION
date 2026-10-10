@@ -175,6 +175,18 @@ def demo_send(name: str, msg_id: str, kva: Optional[float] = None):
     return {"sent": sent, **demo.status(d.cfg)}
 
 
+@app.get("/api/{name}/components")
+def components(name: str, t: Optional[str] = None, kva: Optional[float] = None):
+    """3D twin component states and inspector records at the cursor."""
+    from ..twin import components as TC
+    tw = _twin(name, kva)
+    fresh = None
+    if name == "live":
+        from ..live.api import STORE
+        fresh = STORE.freshness()
+    return TC.assess(TC.from_twin(tw, tw.locate(_cursor(t)), fresh))
+
+
 @app.get("/api/{name}/alerts")
 def alerts(name: str):
     from .engine import _alert_json

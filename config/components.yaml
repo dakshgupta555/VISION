@@ -1,0 +1,91 @@
+# Components of the 3D twin. The id is the name of the group in the 3D model;
+# the state of each comes from the live analytics through the rule named in
+# `assess`, never from a fixed colour. A component with no evidence is grey:
+# an unmeasured component is never green by default.
+#
+# Thresholds marked `source: illustrative` are judgements, editable here.
+
+components:
+  # ---- active part -------------------------------------------------------------
+  - id: core
+    name: Core and yokes (three-limb)
+    group: active part
+    assess: core
+    evidence: [VR, VY, VB]
+    missing: [core temperature, dissolved gas, no-load loss measurement]
+    thresholds: {overflux_warn_pu: 1.05, overflux_alarm_pu: 1.10, source: "illustrative (typical 5 % / 10 % overvoltage margins)"}
+
+  - {id: lv_winding_r, name: "LV winding, R phase", group: windings, assess: winding, phase: R, side: LV, evidence: [IR, oil_temp]}
+  - {id: lv_winding_y, name: "LV winding, Y phase", group: windings, assess: winding, phase: Y, side: LV, evidence: [IY, oil_temp]}
+  - {id: lv_winding_b, name: "LV winding, B phase", group: windings, assess: winding, phase: B, side: LV, evidence: [IB, oil_temp]}
+  - {id: hv_winding_r, name: "HV winding, R phase", group: windings, assess: winding, phase: R, side: HV, evidence: [IR, oil_temp]}
+  - {id: hv_winding_y, name: "HV winding, Y phase", group: windings, assess: winding, phase: Y, side: HV, evidence: [IY, oil_temp]}
+  - {id: hv_winding_b, name: "HV winding, B phase", group: windings, assess: winding, phase: B, side: HV, evidence: [IB, oil_temp]}
+
+  # ---- oil and cooling -------------------------------------------------------------
+  - id: oil
+    name: Insulating oil
+    group: oil and cooling
+    assess: oil
+    evidence: [oil_temp, ambient_temp]
+    missing: [oil level, dissolved gas, moisture, dielectric strength]
+    thresholds: {top_oil_warn_c: 95, top_oil_alarm_c: 105, source: "105 C: IEC 60076-7 top-oil limit for normal cyclic loading; 95 C illustrative margin"}
+
+  - id: radiators
+    name: Radiator fins
+    group: oil and cooling
+    assess: cooling
+    evidence: [oil_temp, ambient_temp, IR, IY, IB]
+    missing: [fin surface temperature, airflow]
+    thresholds: {slope_warn: 1.025, slope_alarm: 1.06, source: "1.06: the cooling alarm; 1.025: healthy p95 of the rise-fit slope"}
+
+  - id: tank
+    name: Tank
+    group: oil and cooling
+    assess: unmonitored
+    missing: [tank surface temperature, pressure, leak detection]
+
+  - id: conservator
+    name: Conservator and oil gauge
+    group: oil and cooling
+    assess: conservator
+    missing: [oil level reading]
+
+  - id: breather
+    name: Silica-gel breather
+    group: oil and cooling
+    assess: unmonitored
+    missing: [silica-gel colour or moisture]
+
+  # ---- terminals and fittings ------------------------------------------------------
+  - {id: hv_bushing_r, name: "HV bushing, R phase", group: bushings, assess: unmonitored, missing: [HV current, HV voltage, bushing temperature]}
+  - {id: hv_bushing_y, name: "HV bushing, Y phase", group: bushings, assess: unmonitored, missing: [HV current, HV voltage, bushing temperature]}
+  - {id: hv_bushing_b, name: "HV bushing, B phase", group: bushings, assess: unmonitored, missing: [HV current, HV voltage, bushing temperature]}
+  - {id: lv_bushing_r, name: "LV bushing, R phase", group: bushings, assess: unmonitored, missing: [terminal temperature]}
+  - {id: lv_bushing_y, name: "LV bushing, Y phase", group: bushings, assess: unmonitored, missing: [terminal temperature]}
+  - {id: lv_bushing_b, name: "LV bushing, B phase", group: bushings, assess: unmonitored, missing: [terminal temperature]}
+  - {id: lv_bushing_n, name: "LV bushing, neutral", group: bushings, assess: unmonitored, missing: [neutral current is not used by the twin]}
+  - {id: tap_switch, name: Off-load tap switch, group: fittings, assess: unmonitored, missing: [tap position]}
+  - {id: drain_valve, name: Drain valve, group: fittings, assess: unmonitored, missing: [leak detection]}
+  - {id: earthing, name: Earthing terminal, group: fittings, assess: unmonitored, missing: [earth resistance]}
+
+  # ---- instrumentation -----------------------------------------------------------------
+  - id: oil_pocket
+    name: Oil temperature pocket (probe)
+    group: instrumentation
+    assess: oil_probe
+    evidence: [oil_temp]
+
+  - id: monitor_box
+    name: Monitoring device (CPRI)
+    group: instrumentation
+    assess: monitor
+    evidence: [IR, IY, IB, VR, VY, VB, oil_temp, ambient_temp]
+
+winding:
+  # per-phase hot-spot = measured top oil + C57.91 winding gradient at that phase's current
+  hotspot_warn_c: 110        # ageing factor 1.0: insulation ages at its rated rate
+  hotspot_alarm_c: 120       # IEC 60076-7 hot-spot limit, normal cyclic loading, distribution transformers
+  load_warn_pu: 0.90
+  load_alarm_pu: 1.00        # the overload alarm
+  colour_scale: {cool_c: 40, hot_c: 110}   # cool grey -> orange; red is reserved for alarms

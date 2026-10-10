@@ -17,3 +17,14 @@
 /* Every reading is instrumentation: monospace, tabular numerals. */
 .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+
+/* Digital twin workspace: sentence case, proportional text with tabular figures. */
+.twin-ui { font-family: Inter, ui-sans-serif, system-ui, sans-serif; font-variant-numeric: tabular-nums; }
+.twin-ui .num { font-family: inherit; }
+.twin-btn { background: #121821; border: 1px solid #1f2a37; color: #d7dee8; border-radius: 6px;
+            padding: 4px 10px; font-size: 12px; }
+.twin-btn:hover { border-color: #22d3ee; }
+.twin-btn-primary { background: #22d3ee; color: #0b0f14; border-color: #22d3ee; font-weight: 600; }
+.twin-tip { background: rgba(11, 15, 20, 0.92); border: 1px solid #1f2a37; color: #d7dee8; padding: 6px 8px;
+            border-radius: 6px; font: 12px/1.35 Inter, ui-sans-serif, system-ui, sans-serif; width: 240px; }
+.twin-tip-sensor { border-color: #a855f7; color: #e9d5ff; width: auto; white-space: nowrap; }

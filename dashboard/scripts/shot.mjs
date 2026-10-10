@@ -15,11 +15,14 @@ const url = arg("url", "http://localhost:5173");
 const t = arg("t", null);
 const scenario = arg("scenario", null);
 const mode = arg("mode", null);                 // "live" clicks the Live switch
+const view = arg("view", null);                 // "twin" opens the Digital twin page
+const select = arg("select", null);             // a component name to click in the list
 const out = arg("out", "../screens/dashboard.png");
 const clip = arg("clip", null);
 const width = Number(arg("width", 1440)), height = Number(arg("height", 900));
 
-const browser = await chromium.launch();
+// software WebGL so the 3D twin renders headless (SwiftShader)
+const browser = await chromium.launch({ args: ["--use-gl=angle", "--use-angle=swiftshader", "--enable-unsafe-swiftshader", "--ignore-gpu-blocklist"] });
 const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
 const problems = [];
 page.on("console", (m) => { if (m.type() === "error") problems.push(`console: ${m.text()}`); });
@@ -48,6 +51,14 @@ if (t !== null) {
   }, String(t));
 }
 if (mode !== "live") await page.waitForLoadState("networkidle");   // an SSE stream never goes idle
+if (view === "twin") {
+  await page.getByRole("button", { name: "Digital twin", exact: true }).first().click();
+  await page.waitForTimeout(Number(arg("twinwait", 5000)));
+  if (select) { await page.getByRole("button", { name: select }).first().click(); await page.waitForTimeout(1500); }
+  for (const b of (arg("click", "") || "").split(",").filter(Boolean)) {   // e.g. --click "X-ray,2D schematic"
+    await page.getByRole("button", { name: b, exact: true }).first().click(); await page.waitForTimeout(1200);
+  }
+}
 await page.waitForTimeout(800);                 // charts settle
 
 mkdirSync(dirname(out), { recursive: true });
@@ -58,6 +69,9 @@ if (clip) {
 }
 const dims = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.scrollHeight]);
 const canvases = await page.evaluate(() => document.querySelectorAll("canvas").length);
+const glinfo = await page.evaluate(() => { const c = document.createElement("canvas"); const g = c.getContext("webgl2") || c.getContext("webgl");
+  if (!g) return "no WebGL"; const d = g.getExtension("WEBGL_debug_renderer_info"); return d ? g.getParameter(d.UNMASKED_RENDERER_WEBGL) : "WebGL"; });
+console.log(`WebGL: ${glinfo}`);
 console.log(`saved ${out}  page ${dims[0]}x${dims[1]}  canvases ${canvases}`);
 console.log(problems.length ? `PROBLEMS (${problems.length}):\n  ` + problems.join("\n  ") : "no console errors, no failed requests");
 await browser.close();

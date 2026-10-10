@@ -13,6 +13,8 @@ import {
   WhatIf,
 } from "./features.jsx";
 import { InjectPanel, LiveBar, ModeSwitch, useLive } from "./live.jsx";
+import TwinPage from "./twin/TwinPage.jsx";
+import TwinBar, { NavTabs } from "./twin/TwinBar.jsx";
 
 // ---------------------------------------------------------------- 1. header
 
@@ -25,7 +27,7 @@ function HeadStat({ label, value, unit = "", tone = "" }) {
   );
 }
 
-function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded, mode, setMode, stale }) {
+function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded, mode, setMode, stale, view, setView }) {
   const lvl = stale ? "info" : s.status.level;
   const label = stale ? "NO RECENT DATA" : { ok: "NORMAL", warn: "ATTENTION", alarm: "ALARM" }[lvl];
   const active = s.alerts_live.length;
@@ -41,6 +43,7 @@ function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded, mo
           {s.nameplate.rating_kva} kVA · {s.nameplate.hv_kv} kV / {s.nameplate.lv_v} V · {s.nameplate.cooling}
         </div>
       </div>
+      <NavTabs view={view} setView={setView} />
       <div className={`border rounded px-3 py-1 font-semibold tracking-wider ${LEVEL[lvl]}`}>{label}</div>
       <div className="num text-sm text-dim">{s.timestamp.replace("T", " ")}</div>
       <div className="ml-auto flex flex-wrap items-center gap-5">
@@ -323,6 +326,7 @@ export default function App() {
   const inflight = useRef(false);
   const q = kva ? `&kva=${kva}` : "";
   const [mode, setMode] = useState("replay");     // replay is the default and the demo fallback
+  const [view, setView] = useState("dashboard");
   const live = useLive(mode === "live");
 
   useEffect(() => { api("scenarios").then((d) => setScenarios(d.scenarios)).catch((e) => setErr(String(e))); }, []);
@@ -370,20 +374,27 @@ export default function App() {
   if (err && !s) return <div className="p-6 text-alarm num">Backend unreachable: {err}. Start it with: uvicorn dtwin.api.app:app --port 8000</div>;
   if (!s) return <div className="p-6 text-dim">Loading twin…</div>;
   return <Board s={mode === "live" ? live.s : s} series={mode === "live" ? live.series : series}
-    scen={mode === "live" ? "live" : scenario} mode={mode} setMode={setMode} live={live}
+    scen={mode === "live" ? "live" : scenario} mode={mode} setMode={setMode} live={live} view={view} setView={setView}
     scenarios={scenarios} scenario={scenario} setScenario={setScenario} kva={kva} setKva={setKva}
     recorded={recorded} tl={tl} i={i} setI={setI} playing={playing} setPlaying={setPlaying}
     speed={speed} setSpeed={setSpeed} />;
 }
 
-function Board({ s, series, scen, mode, setMode, live, scenarios, scenario, setScenario, kva, setKva, recorded,
-  tl, i, setI, playing, setPlaying, speed, setSpeed }) {
+function Board({ s, series, scen, mode, setMode, live, view, setView, scenarios, scenario, setScenario, kva, setKva,
+  recorded, tl, i, setI, playing, setPlaying, speed, setSpeed }) {
   const stale = mode === "live" && Boolean(live.status?.stale);
+  if (view === "twin") {
+    return (
+      <TwinPage scen={scen} cursor={s.i} version={`${s.timestamp}|${live.status?.stale}`}
+        header={<TwinBar s={s} view={view} setView={setView} mode={mode} setMode={setMode} live={live}
+          tl={tl} i={i} setI={setI} playing={playing} setPlaying={setPlaying} />} />
+    );
+  }
   return (
     <div className="min-h-screen">
       <Header s={s} scenarios={scenarios} scenario={scenario} setScenario={setScenario}
         kva={kva} setKva={setKva} recorded={recorded ?? s.nameplate.rating_kva} mode={mode} setMode={setMode}
-        stale={stale} />
+        stale={stale} view={view} setView={setView} />
       {s.data_source.warnings.length > 0 && (
         <div className="px-4 py-1.5 border-b border-warn bg-warn/10 text-xs text-warn">
           <b>Data source:</b> {s.data_source.warnings.join(" · ")}
