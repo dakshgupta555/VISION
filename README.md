@@ -29,6 +29,16 @@ currents, three phase voltages, top-oil and ambient temperature. Nothing else.
     python -m dtwin.live                           # optional live stream, 120x real time
     ./check_all.sh                                 # every regression suite, one line each
 
+## Network dashboard (separate app, `docs/network.md`)
+
+A district of transformers on a simulated LoRaWAN network, plus a deployment
+planner. Illustrative data only; it does not change the app above.
+
+    uvicorn dtwin_network.app:app --port 8001                # network backend
+    cd network-dashboard && npm install && npx vite          # http://localhost:5180
+    python -m dtwin_network.sim                              # fleet simulator, posts to :8001
+    python check_network.py                                  # 26 checks (needs :8000 and :5173 for the last)
+
 ## Key equations (full set in `docs/methodology.md`)
 
     top-oil rise     dTO_u = 55 K x ((K^2 x 5 + 1) / 6)^0.8           first-order lag, tau_oil 3 h
