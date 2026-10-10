@@ -1,0 +1,59 @@
+# Thermal FEM of one phase leg (dtwin/physics/fem.py).
+# Every number carries its source. "illustrative" means: a plausible value for
+# a 100 kVA 11 kV / 433 V ONAN unit, to be replaced by design data.
+
+conductor: aluminium            # aluminium | copper (Indian DTs are often aluminium)
+
+materials:                      # thermal conductivity, W/(m K)
+  copper:    {k: 401.0, source: "CRC Handbook, pure Cu at 300 K; commercial grades slightly lower, to be verified"}
+  aluminium: {k: 237.0, source: "CRC Handbook, pure Al at 300 K; EC-grade Al slightly lower, to be verified"}
+  paper:     {k: 0.19,  source: "oil-impregnated kraft paper, typical, to be verified (literature spans about 0.10-0.20)"}
+  oil:       {k: 0.13,  source: "mineral transformer oil, typical, to be verified (literature about 0.13-0.15)"}
+
+# Winding cross-section, 100 kVA. Radii from the core-limb axis, heights of the
+# winding blocks; both blocks centred on the same mid-height. ILLUSTRATIVE.
+geometry:
+  rating_kva: 100
+  lv: {r_in_m: 0.072, r_out_m: 0.094, height_m: 0.320}
+  hv: {r_in_m: 0.104, r_out_m: 0.140, height_m: 0.300}
+  scale_rule: "linear dimensions x (kVA / 100)^0.25 (power ~ size^4 scaling law), illustrative"
+  source: illustrative
+
+# Volume fractions of the homogenised winding block. ILLUSTRATIVE.
+fill:
+  lv: {conductor: 0.70, paper: 0.25, oil: 0.05}     # foil or strip, thin paper layers
+  hv: {conductor: 0.55, paper: 0.35, oil: 0.10}     # enamelled round wire, layer paper
+
+# Rated average-winding to average-oil gradient g_r, used ONCE to calibrate h.
+# 23 K is the ONAN distribution-transformer default of Alliander's open-source
+# IEC 60076-7 implementation (transformer_thermal_model, distribution.py),
+# whose other defaults (x 0.8, y 1.6, k11 1, k21 1, k22 2, tau_o 180 min,
+# tau_w 4 min) are the IEC 60076-7 ONAN distribution set. Replace with the
+# heat-run test value when it is known.
+gradient_rated_k: 23.0
+gradient_source: "IEC 60076-7 ONAN distribution default g_r = 23 K, as encoded in Alliander transformer_thermal_model"
+
+# Hot-spot factor reference, for the cross-check only (never fed into the FEM).
+hotspot_factor_reference:
+  value: 1.2
+  band: [1.1, 1.3]
+  source: >-
+    Alliander transformer_thermal_model (MPL-2.0), an IEC 60076-7 implementation:
+    distribution-transformer default hot_spot_fac = 1.2; its documentation states
+    H is "generally expected" to range between 1.1 and 1.3. The IEC 60076-7 clause
+    8.1.4 text itself was not available to us (paywalled), so the standard's own
+    value is NOT quoted here; check it against a licensed copy.
+
+# Oil-temperature profile along the winding: linear from bottom oil (z = 0,
+# bottom of the tallest winding) to top oil (its top). Bottom oil = top oil -
+# fraction x top-oil rise. ASSUMPTION: 0.4 makes the average oil rise 0.8 x the
+# top-oil rise, a common ONAN rule of thumb; to be verified on a heat run.
+bottom_oil_fraction: 0.4
+
+# Structured triangle mesh, cells per winding block (each cell = 2 triangles).
+# Chosen from the convergence study in check_fem.py.
+mesh: {nr: 16, nz: 96}
+
+# Losses: DC I^2 R only, at the circuit's reference resistance. Eddy and stray
+# losses are ignored (set eddy_fraction > 0 to add them as uniform extra heat).
+eddy_fraction: 0.0
