@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { api } from "../ui.jsx";
+import Ranked from "../eng/Ranked.jsx";
 import { FOCUS } from "./focus.js";
 import Schematic from "./Schematic.jsx";
 import { hotspotColor, STATE, VIOLET, webglAvailable } from "./states.js";
@@ -127,7 +128,12 @@ function Inspector({ c, simulated }) {
         </Section>
       )}
       {c.deviation && <Section title="Deviation"><p className="text-xs tabular-nums">{c.deviation}</p></Section>}
-      {c.hypotheses.length > 0 && (
+      {c.findings?.length > 0 && (
+        <Section title="Ranked hypotheses (not conclusions)">
+          {c.findings.map((f) => <Ranked key={f.condition} finding={f} />)}
+        </Section>
+      )}
+      {!c.findings?.length && c.hypotheses.length > 0 && (
         <Section title="Hypotheses (not conclusions)">
           <ul className="text-xs list-disc ml-4">{c.hypotheses.map((h) => <li key={h}>{h}</li>)}</ul>
         </Section>

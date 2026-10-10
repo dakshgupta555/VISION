@@ -9,6 +9,7 @@ import math
 import sys
 
 import numpy as np
+import pandas as pd
 
 from dtwin.api.engine import get_twin
 from dtwin.physics import circuit as C
@@ -89,8 +90,55 @@ lead = [x for x in L["regulation_curve"] if not x["lagging"]]
 check("regulation: falls from lagging to leading power factor, negative when leading",
       lag[0]["regulation_pct"] > lag[-1]["regulation_pct"] and lead[-1]["regulation_pct"] < 0)
 
-if __name__ == "__main__" and "--part" not in sys.argv:
-    pass
+# ---- component diagnostics ------------------------------------------------------------------
+import copy
+from dtwin.live.store import analyse
+from dtwin.twin import components as TC
+from dtwin.twin.diagnose import diagnose
+
+a = {c["id"]: c for c in TC.assess(TC.from_twin(tw, tw.locate("2026-04-02 10:00")))["components"]}
+check("core grey in service: the measured current is load current", a["core"]["state"] == "grey"
+      and "load current" in a["core"]["reason"], a["core"]["reason"][:70])
+ev = TC.from_twin(tw, tw.locate("2026-04-02 10:00"))
+nl = C.solve_load(p0, load_pu=0.0)
+ev["oc_test"] = {"v_line": np_.hv_kv * 1000, "i_line": abs(nl.I0), "p_w": nl.p_core_w, "side": "HV"}
+core_oc = next(c for c in TC.assess(ev)["components"] if c["id"] == "core")
+check("core assessable once open-circuit test data are supplied", core_oc["state"] == "green", core_oc["reason"])
+check("healthy connections: all three LV phases green", all(a[f"lv_bushing_{p}"]["state"] == "green" for p in "ryb"))
+
+df = tw.df.copy()
+df["VY"] = df["VY"] - 0.06 * df["IY"]                  # a 60 mohm joint on the Y-phase path
+twj = analyse(df.loc["2026-04-01":"2026-04-06"], 100.0, "simulator")
+aj = {c["id"]: c for c in TC.assess(TC.from_twin(twj, len(twj.rows) - 1))["components"]}
+check("a high-resistance joint on one phase turns only that connection yellow",
+      aj["lv_bushing_y"]["state"] == "yellow" and aj["lv_bushing_r"]["state"] == "green" and aj["lv_bushing_b"]["state"] == "green",
+      aj["lv_bushing_y"]["rule"]["substituted"])
+
+# state transitions through the showcase cooling fault: green -> yellow -> red, in order, never skipping back
+seq = []
+for t in pd.date_range("2026-04-20 12:00", "2026-04-23 00:00", freq="2h"):
+    st = next(c for c in TC.assess(TC.from_twin(tw, tw.locate(t)))["components"] if c["id"] == "radiators")["state"]
+    if not seq or seq[-1] != st:
+        seq.append(st)
+check("radiators move green -> yellow -> red as the cooling fault develops", seq[:3] == ["green", "yellow", "red"], " -> ".join(seq))
+
+# every finding is placed on a component that is itself flagged, and is supported
+bad = []
+for t in ["2026-04-23 15:00", "2026-04-14 17:00", "2026-04-10 12:00", "2026-04-17 12:00", "2026-04-28 03:00"]:
+    d = diagnose(tw, tw.locate(t))
+    comps = {c["id"]: c for c in d["components"]["components"]}
+    for f in d["findings"]:
+        top = f["ranked"][0]
+        if comps[f["component_id"]]["state"] in ("green", "grey") or not f["evidence"] or (top["likelihood"] != "excluded" and not top["supporting"] and top["likelihood"] == "more likely"):
+            bad.append((t, f["condition"], f["component_id"]))
+        if any(h["likelihood"] == "excluded" and not h["against"] for h in f["ranked"]):
+            bad.append((t, f["condition"], "excluded without a reason"))
+check("findings sit on flagged components; top hypotheses carry evidence; exclusions give a reason", not bad, str(bad[:3]))
+d = diagnose(tw, tw.locate("2026-04-23 15:00"))
+cool = next(f for f in d["findings"] if f["condition"] == "Cooling path degraded")
+check("cooling: gradual onset ranks fouling / oil loss above a closed valve; fans excluded on ONAN",
+      cool["ranked"][0]["likelihood"] == "more likely" and cool["ranked"][-1]["likelihood"] == "excluded"
+      and next(h for h in cool["ranked"] if "valve" in h["hypothesis"])["likelihood"] == "less likely")
 
 print(f"\n  {sum(R)} of {len(R)} engineering checks passed")
 sys.exit(0 if all(R) else 1)

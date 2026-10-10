@@ -185,13 +185,27 @@ def demo_send(name: str, msg_id: str, kva: Optional[float] = None):
 @app.get("/api/{name}/components")
 def components(name: str, t: Optional[str] = None, kva: Optional[float] = None):
     """3D twin component states and inspector records at the cursor."""
-    from ..twin import components as TC
+    from ..twin.diagnose import diagnose
     tw = _twin(name, kva)
     fresh = None
     if name == "live":
         from ..live.api import STORE
         fresh = STORE.freshness()
-    return TC.assess(TC.from_twin(tw, tw.locate(_cursor(t)), fresh))
+    return diagnose(tw, tw.locate(_cursor(t)), fresh)["components"]
+
+
+@app.get("/api/{name}/diagnose")
+def diagnose_route(name: str, t: Optional[str] = None, kva: Optional[float] = None):
+    """Component groups, the evidence for each, and ranked hypotheses."""
+    from ..twin.diagnose import diagnose
+    tw = _twin(name, kva)
+    fresh = None
+    if name == "live":
+        from ..live.api import STORE
+        fresh = STORE.freshness()
+    d = diagnose(tw, tw.locate(_cursor(t)), fresh)
+    d.pop("components")
+    return d
 
 
 @app.post("/api/{name}/simulate")

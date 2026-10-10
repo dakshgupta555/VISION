@@ -388,7 +388,7 @@ function Board({ s, series, scen, mode, setMode, live, view, setView, scenarios,
   const [simAt, setSimAt] = useState(null);       // baseline cursor frozen when Simulate opens
   if (view === "engineering") {
     return (
-      <EngineeringPage scen={scen} cursor={s.i}
+      <EngineeringPage scen={scen} cursor={s.i} version={s.timestamp}
         header={<TwinBar s={s} view={view} setView={setView} mode={mode} setMode={setMode} live={live}
           tl={tl} i={i} setI={setI} playing={playing} setPlaying={setPlaying} />} />
     );

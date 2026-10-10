@@ -61,9 +61,9 @@ components:
   - {id: hv_bushing_r, name: "HV bushing, R phase", group: bushings, assess: unmonitored, missing: [HV current, HV voltage, bushing temperature]}
   - {id: hv_bushing_y, name: "HV bushing, Y phase", group: bushings, assess: unmonitored, missing: [HV current, HV voltage, bushing temperature]}
   - {id: hv_bushing_b, name: "HV bushing, B phase", group: bushings, assess: unmonitored, missing: [HV current, HV voltage, bushing temperature]}
-  - {id: lv_bushing_r, name: "LV bushing, R phase", group: bushings, assess: unmonitored, missing: [terminal temperature]}
-  - {id: lv_bushing_y, name: "LV bushing, Y phase", group: bushings, assess: unmonitored, missing: [terminal temperature]}
-  - {id: lv_bushing_b, name: "LV bushing, B phase", group: bushings, assess: unmonitored, missing: [terminal temperature]}
+  - {id: lv_bushing_r, name: "LV bushing and connection, R phase", group: bushings, assess: connection, phase: R, evidence: [IR, VR], missing: [terminal temperature, joint resistance measurement]}
+  - {id: lv_bushing_y, name: "LV bushing and connection, Y phase", group: bushings, assess: connection, phase: Y, evidence: [IY, VY], missing: [terminal temperature, joint resistance measurement]}
+  - {id: lv_bushing_b, name: "LV bushing and connection, B phase", group: bushings, assess: connection, phase: B, evidence: [IB, VB], missing: [terminal temperature, joint resistance measurement]}
   - {id: lv_bushing_n, name: "LV bushing, neutral", group: bushings, assess: unmonitored, missing: [neutral current is not used by the twin]}
   - {id: tap_switch, name: Off-load tap switch, group: fittings, assess: unmonitored, missing: [tap position]}
   - {id: drain_valve, name: Drain valve, group: fittings, assess: unmonitored, missing: [leak detection]}
@@ -81,6 +81,16 @@ components:
     group: instrumentation
     assess: monitor
     evidence: [IR, IY, IB, VR, VY, VB, oil_temp, ambient_temp]
+
+# Open-circuit test data, if ever supplied, make the core assessable:
+#   oc_test: {v_line: 433, i_line: 2.7, p_w: 260, side: LV}
+oc_test: null
+
+connection:
+  # apparent series resistance of each phase's path, from 24 h of V against I
+  ratio_warn: 1.5            # one phase this many times the median of the others
+  min_current_spread_a: 5.0  # the regression needs this much load variation
+  source: "illustrative: no joint-resistance test data"
 
 winding:
   # per-phase hot-spot = measured top oil + C57.91 winding gradient at that phase's current

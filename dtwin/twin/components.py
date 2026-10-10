@@ -66,7 +66,32 @@ def from_twin(tw, i, fresh=None):
         "alerts_live": st["alerts_live"],
         "stale": bool(fresh and fresh.get("stale")), "stale_reason": (fresh or {}).get("reason"),
         "simulated": False,
+        "connection": connection_evidence(tw, i),
+        "oc_test": config().get("oc_test"),
     }
+
+
+def connection_evidence(tw, i, hours=24.0):
+    """Apparent series resistance of each phase's LV path: the slope of its
+    phase voltage against its own current over the last `hours`. A
+    high-resistance joint shows as one phase whose voltage falls faster with
+    load than the others'. Uses trusted samples only."""
+    t = tw.rows.index[i]
+    w = tw.df.loc[t - __import__("pandas").Timedelta(hours=hours):t]
+    rw = tw.rows.loc[w.index]
+    out = {}
+    for ph in PHASES:
+        ok = rw[f"ch_I{ph}"].isin(["ok", "step"]) & rw[f"ch_V{ph}"].isin(["ok", "step"])
+        x, y = w[f"I{ph}"][ok].to_numpy(float), w[f"V{ph}"][ok].to_numpy(float)
+        m = np.isfinite(x) & np.isfinite(y)
+        x, y = x[m], y[m]
+        if len(x) < 12:
+            out[ph] = {"r_ohm": None, "n": int(len(x)), "spread_a": None}
+            continue
+        spread = float(np.percentile(x, 90) - np.percentile(x, 10))
+        slope = float(np.cov(x, y)[0, 1] / np.var(x, ddof=1)) if np.var(x) > 0 else float("nan")
+        out[ph] = {"r_ohm": -slope, "n": int(len(x)), "spread_a": spread}
+    return {"hours": hours, "phases": out}
 
 
 # --------------------------------------------------------------------------- #
@@ -157,29 +182,88 @@ def a_winding(c, ev):
 
 
 def a_core(c, ev):
+    """In service the measured current is LOAD current, so the no-load
+    current, the one direct electrical evidence of core condition, cannot be
+    observed. The core stays grey unless open-circuit test data are supplied."""
+    from ..physics import circuit as Cc
     np_, th = ev["np"], c["thresholds"]
     vs = {p: v for p, v in ev["voltages"].items() if v is not None and ev["channels"].get(f"V{p}") not in BAD}
-    if not vs:
-        return _rec("grey", "No trusted phase voltage: overfluxing cannot be assessed.",
+    obs = [_obs(f"V{p}", v, "V") for p, v in vs.items()]
+    if vs:
+        pu = max(vs.values()) / np_.voltage_nominal_ln_v
+        obs.append(_obs("Highest phase voltage", pu, "pu", 3))
+    oc = ev.get("oc_test")
+    if not oc:
+        note = (f" Highest phase voltage is {pu:.3f} pu" + (", above the overfluxing margin: worth checking the tap."
+                                                             if pu > th["overflux_warn_pu"] else ".")) if vs else ""
+        return _rec("grey", "Not assessable in service: the measured current is load current, so the no-load "
+                            "current that reflects core condition cannot be observed." + note,
+                    observed=obs,
+                    expected=[_obs("Needed", "an open-circuit test: rated voltage, secondary open")],
+                    rule={"equation": "core condition <- I0 and P0 at rated voltage (open-circuit test)",
+                          "substituted": "no open-circuit test data configured",
+                          "result": "not assessed"},
+                    missing=["Open-circuit test (V, I0, P0) for this unit"] + c.get("missing", []),
+                    verification=["Run an open-circuit test at the next outage; enter it as oc_test in "
+                                  "config/components.yaml."],
+                    limits=["Overfluxing from high voltage is shown as an observation only."])
+    p = Cc.from_nameplate(np_)
+    test = Cc.open_circuit_test(oc["v_line"], oc["i_line"], oc["p_w"])
+    side_a = p.a if str(oc.get("side", "LV")).upper() == "LV" else 1.0
+    rc_hv, xm_hv = test["Rc_ohm"] * side_a ** 2, test["Xm_ohm"] * side_a ** 2
+    dev = max(abs(rc_hv / p.Rc - 1), abs(xm_hv / p.Xm - 1))
+    state = "green" if dev <= 0.2 else "yellow"
+    return _rec(state, f"Open-circuit test: Rc and Xm are within {100 * dev:.0f} % of the design values.",
+                observed=obs + [_obs("Rc from test (HV)", rc_hv / 1000, "kohm"), _obs("Xm from test (HV)", xm_hv / 1000, "kohm")],
+                expected=[_obs("Rc design (HV)", p.Rc / 1000, "kohm"), _obs("Xm design (HV)", p.Xm / 1000, "kohm")],
+                rule={"equation": "Rc = V / Ic, Xm = V / Im, Ic = P0 / V, Im = sqrt(I0^2 - Ic^2)",
+                      "substituted": f"Ic {test['Ic_a']:.3f} A, Im {test['Im_a']:.3f} A on the test side",
+                      "result": f"largest deviation {100 * dev:.0f} % (20 % allowed)"},
+                deviation=f"{100 * dev:.0f} % from design",
+                hypotheses=["Lamination insulation damage or a core-joint problem (hypothesis)."] if state != "green" else [],
+                verification=["Repeat the test at rated voltage; compare with the factory test."] if state != "green" else ["None needed."],
+                limits=["The design Rc and Xm are illustrative unless factory test data replace them."])
+
+
+def a_connection(c, ev):
+    cfg = config()["connection"]
+    ph = c["phase"]
+    conn = ev.get("connection")
+    if not conn:
+        return _rec("grey", "Not modelled in a simulation: connection condition needs measured voltage and current.",
                     missing=c.get("missing", []))
-    pu = max(vs.values()) / np_.voltage_nominal_ln_v
-    p_max = max(vs, key=vs.get)
-    state = "red" if pu > th["overflux_alarm_pu"] else "yellow" if pu > th["overflux_warn_pu"] else "green"
-    why = (f"V{p_max} is {100 * (pu - 1):+.1f} % from nominal: " +
-           ("overfluxing, core loss and magnetising current rise steeply" if state != "green"
-            else "no overfluxing; core condition otherwise not observable"))
+    me = conn["phases"].get(ph, {})
+    others = [conn["phases"][q]["r_ohm"] for q in PHASES if q != ph and conn["phases"][q]["r_ohm"] is not None]
+    if me.get("r_ohm") is None or not others:
+        return _rec("grey", f"Too few trusted {ph}-phase samples in the last {conn['hours']:g} h to assess the connection.",
+                    missing=c.get("missing", []))
+    if me["spread_a"] < cfg["min_current_spread_a"]:
+        return _rec("grey", f"The {ph}-phase current varied by only {me['spread_a']:.1f} A in the last {conn['hours']:g} h: "
+                            "too little to estimate the connection resistance.", missing=c.get("missing", []))
+    ref = float(np.median(others))
+    ratio = me["r_ohm"] / ref if ref > 0 else float("inf")
+    state = "yellow" if ratio > cfg["ratio_warn"] else "green"
+    r_m, ref_m = 1000 * me["r_ohm"], 1000 * ref
+    why = (f"the {ph}-phase voltage falls {ratio:.1f}x faster with load than the other phases'"
+           if state == "yellow" else f"the {ph}-phase voltage falls with load like the other phases'")
     return _rec(state, why[0].upper() + why[1:] + ".",
-                observed=[_obs(f"V{p}", v, "V") for p, v in vs.items()],
-                expected=[_obs("Nominal phase voltage", np_.voltage_nominal_ln_v, "V", 0),
-                          _obs("Warning / alarm", f"{th['overflux_warn_pu']:.2f} / {th['overflux_alarm_pu']:.2f} pu")],
-                rule={"equation": "flux ~ V / f ; overfluxing when V / V_nom exceeds the margin",
-                      "substituted": f"{max(vs.values()):.1f} / {np_.voltage_nominal_ln_v:g} = {pu:.3f} pu",
-                      "result": state},
-                deviation=f"{100 * (pu - 1):+.1f} % from nominal",
-                hypotheses=["Tap position too high for the present feeder voltage (hypothesis)."] if state != "green" else [],
-                verification=["Check the off-load tap position against the feeder voltage."] if state != "green" else ["None needed."],
+                observed=[_obs(f"Apparent series resistance, {ph}", r_m, "mohm"),
+                          _obs("Median of the other phases", ref_m, "mohm"),
+                          _obs("Samples, last 24 h", me["n"], "", 0),
+                          _obs(f"{ph}-phase current spread (p10-p90)", me["spread_a"], "A")],
+                expected=[_obs("Ratio to the other phases", f"<= {cfg['ratio_warn']}")],
+                rule={"equation": "r = -dV_ph / dI_ph (least squares over 24 h of trusted samples)",
+                      "substituted": f"r_{ph} = {r_m:.2f} mohm, others {ref_m:.2f} mohm, ratio {ratio:.2f}",
+                      "result": "a joint adding resistance in one phase only" if state == "yellow" else "consistent"},
+                deviation=f"x{ratio:.2f} the other phases",
+                hypotheses=([f"High-resistance joint at the {ph}-phase LV terminal or cable lug (hypothesis).",
+                             f"Undersized or damaged {ph}-phase cable (hypothesis)."] if state == "yellow" else []),
+                verification=([f"Thermal image of the {ph}-phase LV bushing and lug under load.",
+                               "Measure joint resistance (micro-ohmmeter) at the next outage."]
+                              if state == "yellow" else ["None needed."]),
                 missing=c.get("missing", []),
-                limits=["Frequency is taken as 50 Hz.", c["thresholds"]["source"]])
+                limits=["The slope includes the transformer's own impedance and the cable; only the difference "
+                        "between phases is used.", cfg["source"]])
 
 
 def a_oil(c, ev):
@@ -302,6 +386,7 @@ def a_monitor(c, ev):
 
 
 ASSESS = {"unmonitored": a_unmonitored, "winding": a_winding, "core": a_core, "oil": a_oil,
+          "connection": a_connection,
           "cooling": a_cooling, "conservator": a_conservator, "oil_probe": a_oil_probe, "monitor": a_monitor}
 
 FAULT_COMPONENT = {"cooling": "radiators", "mismatch": "oil", "temp_offset": "oil_pocket",
@@ -313,7 +398,7 @@ def assess(ev):
     out = []
     for c in config()["components"]:
         rec = ASSESS[c["assess"]](c, ev)
-        if ev.get("stale") and rec["state"] != "grey":
+        if ev.get("stale") and c["assess"] != "unmonitored":    # every evidence-based part states the staleness
             rec = {**rec, "state": "grey", "reason": f"No recent data: {ev.get('stale_reason')}. "
                                                        f"Last known: {rec['reason']}"}
         family = "sensor" if rec["state"] == "sensor" else "asset" if rec["state"] in ("red", "yellow") else None

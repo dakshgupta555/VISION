@@ -3,6 +3,8 @@ import {
   CartesianGrid, Legend, Line, LineChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { api } from "../ui.jsx";
+import Ranked from "./Ranked.jsx";
+import { STATE, VIOLET } from "../twin/states.js";
 
 // Engineering page: characteristic curves, losses and efficiency, and (later
 // sections) diagnostics and corrective actions. Sentence case, tabular
@@ -256,16 +258,51 @@ function Losses({ scen, cursor }) {
   );
 }
 
-export default function EngineeringPage({ scen, cursor, header, extraTabs = [] }) {
+// ---------------------------------------------------------------- diagnostics
+function Diagnostics({ scen, cursor, version }) {
+  const [d, setD] = useState(null);
+  useEffect(() => { api(`${scen}/diagnose${scen === "live" ? "" : `?t=${cursor}`}`).then(setD).catch(() => {}); }, [scen, cursor, version]);
+  if (!d) return <p className="text-dim text-sm">Computing…</p>;
+  return (
+    <div>
+      <p className="text-sm text-dim mb-3">Evidence for each component group at {d.timestamp.replace("T", " ")}, and ranked
+        hypotheses for every abnormal finding. Rankings come from stated rules on computed quantities; they are ordinal,
+        not probabilities. A finding is placed on a component only where there is evidence for that component.</p>
+      {d.groups.map((g) => {
+        const st = STATE[g.state] || STATE.grey;
+        return (
+          <Card key={g.group} title={g.group}>
+            <div className="flex items-center gap-3 text-xs mb-2">
+              <span className="px-2 py-0.5 rounded" style={{ border: `1px solid ${g.state === "sensor" ? VIOLET : st.color}`, color: g.state === "grey" ? "#b6bdb9" : g.state === "sensor" ? VIOLET : st.color }}>{st.label}</span>
+              <span className="text-dim">Evidence coverage</span>
+              <div className="w-32 h-2 bg-ink rounded"><div className="h-2 rounded bg-accent" style={{ width: `${100 * g.evidence_coverage}%` }} /></div>
+              <span className="tabular-nums text-dim">{Math.round(100 * g.evidence_coverage)} % of the listed evidence is available</span>
+            </div>
+            <div className="grid md:grid-cols-2 gap-3 text-xs mb-2">
+              <div><div className="font-semibold mb-0.5">Available</div>{g.evidence_available.length ? g.evidence_available.join("; ") : <span className="text-dim">none</span>}</div>
+              <div><div className="font-semibold mb-0.5">Missing</div><span className="text-dim">{g.evidence_missing.join("; ")}</span></div>
+            </div>
+            {g.findings.length ? g.findings.map((f) => <Ranked key={f.condition} finding={f} />)
+              : <p className="text-xs text-dim">No abnormal finding in this group.</p>}
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function EngineeringPage({ scen, cursor, version, header, extraTabs = [] }) {
   const [tab, setTab] = useState("curves");
-  const tabs = [["curves", "Characteristic curves"], ["losses", "Losses and efficiency"], ...extraTabs.map((t) => [t.key, t.label])];
+  const tabs = [["curves", "Characteristic curves"], ["losses", "Losses and efficiency"], ["diagnostics", "Diagnostics"],
+    ...extraTabs.map((t) => [t.key, t.label])];
   const extra = extraTabs.find((t) => t.key === tab);
   return (
     <div className="twin-ui min-h-screen">
       {header}
       <div className="max-w-6xl mx-auto px-4 py-4">
         <Tabs tabs={tabs} value={tab} onChange={setTab} />
-        {tab === "curves" ? <Curves scen={scen} /> : tab === "losses" ? <Losses scen={scen} cursor={cursor} /> : extra?.render()}
+        {tab === "curves" ? <Curves scen={scen} /> : tab === "losses" ? <Losses scen={scen} cursor={cursor} />
+          : tab === "diagnostics" ? <Diagnostics scen={scen} cursor={cursor} version={version} /> : extra?.render()}
       </div>
     </div>
   );
