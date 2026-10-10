@@ -23,7 +23,7 @@ conditions:
     corrective:
       - Clean the fins (low-pressure water or air; no solvents on gaskets).
       - Re-open any partly closed valve and record it.
-      - If the oil level is low, treat it as a possible leak (see \"Oil level to be checked\" below) before topping up.
+      - If the oil level is low, treat it as a possible leak (see 'Oil level to be checked' below) before topping up.
     qualification: [Substation maintenance technician; oil handling requires a trained person.]
     safety: *safety
     materials:
