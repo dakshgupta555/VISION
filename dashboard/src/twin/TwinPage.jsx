@@ -5,7 +5,7 @@ import Schematic from "./Schematic.jsx";
 import { hotspotColor, STATE, VIOLET, webglAvailable } from "./states.js";
 
 const Scene = lazy(() => import("./Scene.jsx"));
-const INSIDE = /^(core|oil|lv_winding|hv_winding)/;
+const INSIDE = /^(core$|oil$|lv_winding|hv_winding)/;    // parts inside the tank (not oil_pocket)
 
 // The digital twin workspace: the transformer in the centre, panels docked at
 // the sides. Sentence case, tabular figures, colour only for status.

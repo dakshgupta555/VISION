@@ -161,8 +161,15 @@ function Transformer({ comps, scale, sel, setSel, hover, setHover, xray }) {
   );
 }
 
+const HOME = [2.5, 1.9, 2.9, 0, 0.62, 0];         // the whole unit, bushings to plinth
+
 function Rig({ controls, fly, onStats }) {
   const { gl } = useThree();
+  useEffect(() => {                                // start framed on the whole unit; Reset returns here
+    if (!controls.current) return;
+    controls.current.setLookAt(...HOME, false);
+    controls.current.saveState();
+  }, [controls]);
   useEffect(() => {
     if (!fly || !controls.current) return;
     const [x, y, z] = fly;

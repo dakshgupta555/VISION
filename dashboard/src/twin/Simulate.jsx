@@ -8,7 +8,12 @@ const Scene = lazy(() => import("./Scene.jsx"));
 // Simulate workspace: an isolated copy of the observed baseline. Everything
 // on this page is hypothetical and says so; the observed data are untouched.
 
-const fmt = (v, d = 1) => (v === null || v === undefined ? "—" : typeof v === "number" ? v.toFixed(d) : v);
+const fmt = (v, d = 1) => {
+  if (v === null || v === undefined) return "—";
+  if (typeof v !== "number") return v;
+  const x = Math.abs(v) < 0.5 * 10 ** -d ? 0 : v;      // no "-0.00"
+  return x.toFixed(d);
+};
 const axis = { stroke: "#7d8a9a", fontSize: 11 };
 
 function Section({ title, children }) {
