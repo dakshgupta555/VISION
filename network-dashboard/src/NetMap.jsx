@@ -161,7 +161,7 @@ export default function NetMap({ fleet, devices, gatewaysLive, risks, filters, p
                 <animate attributeName="opacity" from="0.9" to="0" dur="1.6s" repeatCount="indefinite" /></circle>}
               <circle cx={x} cy={y} r="9" fill={COLOR[lv]} stroke="var(--color-panel)" strokeWidth="2" />
               {selected === a.id && <circle cx={x} cy={y} r="14" fill="none" stroke="var(--color-fg)" strokeWidth="2" />}
-              <CommSvg status={d?.comms.status || "no data"} cx={x + 11} cy={y - 10} />
+              {mode === "network" && <CommSvg status={d?.comms.status || "no data"} cx={x + 11} cy={y - 10} />}
               <text x={x + 13} y={y + 5} fontSize="14" fill="var(--color-fg)" paintOrder="stroke" stroke="var(--scene-bg)" strokeWidth="4">
                 {a.id}</text>
             </g>

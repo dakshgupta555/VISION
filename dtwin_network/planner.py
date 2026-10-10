@@ -239,8 +239,9 @@ def compare(opt, gr):
              f"high-risk units against {gr['high_covered']}."]
     if opt["gateways_opened"] != gr["gateways_opened"]:
         parts.append(f"It opens {', '.join(opt['gateways_opened']) or 'no new gateway'} where greedy opens "
-                     f"{', '.join(gr['gateways_opened']) or 'none'}: greedy judges each unit alone, so it either "
-                     "never pays for a gateway or pays for one without filling it.")
+                     f"{', '.join(gr['gateways_opened']) or 'none'}. Greedy judges each unit alone, so a gateway "
+                     "opens only when one unit's own risk per rupee pays for it; the optimiser counts every unit "
+                     "the gateway would then reach.")
     if only_o:
         parts.append(f"Optimiser adds {', '.join(only_o)}; greedy instead adds {', '.join(only_g) or 'nothing more'}.")
     return " ".join(parts)
