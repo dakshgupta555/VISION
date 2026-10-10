@@ -432,7 +432,7 @@ function Board({ s, series, scen, mode, setMode, live, view, setView, scenarios,
         </div>
         <div className="lg:col-span-2 space-y-3">
           <Alerts groups={s.alert_groups} />
-          {mode === "replay" && <Notifications scenario={scenario} kva={kva} i={s.i} />}
+          <Notifications scenario={scen} kva={mode === "live" ? null : kva} i={mode === "live" ? s.timestamp : s.i} />
         </div>
         <div>
           <Comparison s={s} />

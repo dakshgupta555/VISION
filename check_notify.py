@@ -18,6 +18,11 @@ Escalation and delivery checks. The replay guard is attacked, not assumed.
   7  wording     P3 says "do not send a crew"; P1/P2 never do
   8  causality   nothing in the feed is later than the cursor; re-processing
                  the same cursor sends nothing new
+  9  demo         the explicit Send-for-real path: off without the flag, demo
+                 addresses only, capped
+ 10  live         the live stream, with SMTP credentials and the live flag set
+                 and the network rigged: an injected cooling fault produces its
+                 P1 notice in the outbox and nothing leaves the machine
 """
 
 import os
@@ -242,6 +247,38 @@ def main():
         DM._SENT.clear()
     finally:
         smtplib.SMTP = saved[0]
+
+    # ---- 10 live stream: outbox only, attacked ------------------------------------------
+    from dtwin.live.sim import LiveSimulator
+    from dtwin.live.store import LiveStore
+    from dtwin.live import notify as LN
+    from datetime import datetime as _dt
+    CALLS.clear()
+    smtplib.SMTP, smtplib.SMTP_SSL, urllib.request.urlopen = Boom, Boom, explode
+    os.environ.update(SMTP_ENV)
+    os.environ["DTWIN_NOTIFY_LIVE"] = "1"
+    live_cfg = {**cfg, "outbox": str(tmp / "live_outbox")}
+    try:
+        store = LiveStore()
+        sim = LiveSimulator(start=_dt(2026, 5, 10) - timedelta(hours=48), seed=41)
+        store.add([dict(sim.step(), source="simulator") for _ in range(192)], prewarm=True)
+        store.inject("cooling_degradation", 0.35, ramp_h=12)
+        sent = []
+        for _ in range(4 * 40):
+            sim.set_faults(store.sim_config()["faults"])
+            store.add([dict(sim.step(), source="simulator")], period_s=1.0)
+            sent += LN.notify(store.twin, live_cfg)
+        D._PDF_POOL.submit(lambda: None).result()
+        cool = [m for m in sent if m.tier == "P1" and "Cooling" in m.reason and m.type == "OPEN"]
+        again = LN.notify(store.twin, live_cfg)
+        check("live stream with SMTP credentials set: outbox only, zero network attempts",
+              not CALLS and sent and {m.delivered_via for m in sent} == {"outbox"} and cool and not again,
+              f"{len(sent)} messages (cooling P1 OPEN: {len(cool)}), network attempts {len(CALLS)}, "
+              f"re-run adds {len(again)}")
+    finally:
+        smtplib.SMTP, smtplib.SMTP_SSL, urllib.request.urlopen = saved[0], saved[1], saved[2]
+        os.environ.clear()
+        os.environ.update(saved[3])
 
     D._PDF_POOL.submit(lambda: None).result()
     n_ok = sum(ok for _, ok, _ in RESULTS)

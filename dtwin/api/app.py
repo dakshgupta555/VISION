@@ -119,8 +119,11 @@ _DISPATCHERS = {}
 
 
 def _dispatcher(name, kva):
-    """Replay dispatchers only. The API has no way to construct a live one:
-    scrubbing history can never reach a real recipient."""
+    """Replay (or live-outbox) dispatchers only. The API has no way to construct
+    a live-sending one: scrubbing history can never reach a real recipient."""
+    if name == "live":                       # the live twin changes every sample: never cached
+        from ..live import notify as live_notify
+        return live_notify.dispatcher(_twin(name))
     key = (name, kva)
     if key not in _DISPATCHERS:
         from ..notify.dispatch import Dispatcher
@@ -130,10 +133,14 @@ def _dispatcher(name, kva):
 
 @app.get("/api/{name}/notifications")
 def notifications(name: str, t: Optional[str] = None, kva: Optional[float] = None, limit: int = 40):
-    if name == "live":
-        return {"mode": "live-simulated", "entries": [], "total_planned": 0, "episodes": 0,
-                "outbox": "", "smtp_configured": False, "sms_configured": False,
-                "guard": "notifications are not generated from the live simulator stream"}
+    if name == "live":                       # same policy, outbox only; built on the live twin as it is now
+        from ..live import notify as live_notify
+        tw = _twin(name)
+        d = live_notify.dispatcher(tw)
+        d.process(tw.rows.index[-1])
+        upto = tw.rows.index[-1]
+        return {**d.status(), "upto": upto.isoformat(), "entries": d.feed(upto, limit),
+                "total_planned": len(d.events), "episodes": len(tw.alerts)}
     tw = _twin(name, kva)
     d = _dispatcher(name, kva)
     upto = tw.rows.index[tw.locate(_cursor(t))]

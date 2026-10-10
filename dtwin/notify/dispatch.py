@@ -30,7 +30,9 @@ NO_DISPATCH = "INSTRUMENT FAULT - do not send a crew for a transformer fault."
 
 class Dispatcher:
     def __init__(self, tw, mode="replay", config=None, outbox=None, env=None, live_window_min=30):
-        if mode not in ("replay", "live"):
+        # "outbox": the live simulator stream. Same policy and debounce, same
+        # outbox-only path as replay; only the wording of the note differs.
+        if mode not in ("replay", "outbox", "live"):
             raise ValueError(mode)
         env = os.environ if env is None else env
         if mode == "live" and env.get("DTWIN_NOTIFY_LIVE") != "1":
@@ -50,6 +52,8 @@ class Dispatcher:
                 "smtp_configured": self.smtp.configured(), "sms_configured": self.gprs.configured(),
                 "guard": ("replay: every message goes to the outbox; real email and SMS are disabled"
                           if self.mode == "replay" else
+                          "live stream: every message goes to the outbox; real email and SMS only via Send for real"
+                          if self.mode == "outbox" else
                           f"live: real delivery for events within {self.live_window} of now")}
 
     # ---------------------------------------------------------------- process
@@ -131,14 +135,15 @@ class Dispatcher:
         if ev.attach_pdf:
             lines.append("Condition report (PDF) attached.")
         lines.append(f"-- {np_.tag} digital twin, event time {ev.time:%d %b %Y %H:%M}"
-                     + (" (replay)" if self.mode == "replay" else ""))
+                     + (" (replay)" if self.mode == "replay" else " (live stream, outbox only)"
+                        if self.mode == "outbox" else ""))
 
         frame = st["gprs"]["message"] + f",{ev.type[:3]}" + (",NODISPATCH" if ev.tier == "P3" else "")
         return Message(id=ev.id, time=ev.time.isoformat(), type=ev.type, tier=ev.tier,
                        recipient=ev.recipient, recipient_name=rcp.get("name", ev.recipient),
                        address=address, channel=ev.channel, subject=subject,
                        body="\n".join(lines), sms=frame[:160], reason=ev.reason,
-                       replay=self.mode == "replay", attach_pdf=ev.attach_pdf,
+                       replay=self.mode != "live", attach_pdf=ev.attach_pdf,
                        meta={"incident_start": inc.start.isoformat() if inc else None,
                              "family": inc.family if inc else None})
 
@@ -150,9 +155,10 @@ class Dispatcher:
             msg.meta["attachment_status"] = "ready" if pdf.exists() else "rendering"
         real = {"email": self.smtp, "sms": self.gprs}.get(msg.channel)
 
-        if self.mode == "replay":
+        if self.mode in ("replay", "outbox"):
             msg.delivered_via = "outbox"
-            msg.note = f"replay - {msg.channel} to {msg.address or msg.recipient_name} suppressed"
+            msg.note = (f"{'replay' if self.mode == 'replay' else 'live stream'} - {msg.channel} to "
+                        f"{msg.address or msg.recipient_name} suppressed")
             self.outbox.send(msg)
             if msg.attach_pdf and msg.meta["attachment_status"] != "ready":
                 _PDF_POOL.submit(self._render, msg)

@@ -23,6 +23,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
+from . import notify as live_notify
 from .store import LiveStore
 
 STORE = LiveStore()
@@ -49,6 +50,7 @@ async def post_sample(request: Request):
         n = await asyncio.to_thread(STORE.add, samples, prewarm, period)
     except (ValueError, KeyError) as e:
         raise HTTPException(422, f"sample rejected: {e}")
+    await asyncio.to_thread(live_notify.notify, STORE.twin)       # outbox only
     return {"accepted": n, "analysis_ms": STORE.analysis_ms, "version": STORE.version}
 
 
@@ -60,6 +62,7 @@ def status():
 @router.post("/reset")
 def reset():
     STORE.reset()
+    live_notify.clear()
     return STORE.freshness()
 
 

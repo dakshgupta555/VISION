@@ -323,7 +323,8 @@ export function Notifications({ scenario, kva, i }) {
   const shown = d.entries;
   return (
     <Panel title="Notifications sent" className="overflow-auto max-h-[420px]"
-      right={<span className="text-[10px] text-warn">{d.mode === "replay" ? "REPLAY · outbox only, no real email/SMS" : "LIVE"}</span>}>
+      right={<span className="text-[10px] text-warn">{d.mode === "replay" ? "REPLAY · outbox only, no real email/SMS"
+        : d.mode === "outbox" ? "LIVE STREAM · outbox only, no real email/SMS" : "LIVE"}</span>}>
       <div className={`text-[11px] mb-2 border rounded px-2 py-1 ${demo?.enabled ? "border-accent text-accent" : "border-edge text-dim"}`}>
         {demo?.enabled
           ? <>Demo sends ON · {demo.sends_left} left · real email to {demo.recipients.join(", ")} · click "Send for real" on any row (asks to confirm)</>
