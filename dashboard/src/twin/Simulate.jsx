@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import Schematic from "./Schematic.jsx";
+import { FemCompare } from "./HeatMap.jsx";
 import { webglAvailable } from "./states.js";
 
 const Scene = lazy(() => import("./Scene.jsx"));
@@ -54,11 +55,17 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
   const [err, setErr] = useState(null);
   const gl = useMemo(() => webglAvailable(), []);
   const timer = useRef(null);
-  const run = (inp) => fetch(`/api/${scen}/simulate`, {
+  const [heat, setHeat] = useState(false);
+  const [femR, setFemR] = useState(null);
+  const runFem = (inp) => fetch(`/api/${scen}/fem/simulate`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ t: scen === "live" ? null : cursor, inputs: inp || {} }),
+  }).then((x) => (x.ok ? x.json() : null)).then((j) => j && setFemR(j)).catch(() => {});
+  const run = (inp) => (runFem(inp), fetch(`/api/${scen}/simulate`, {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ t: scen === "live" ? null : cursor, inputs: inp || {} }),
   }).then(async (x) => { const j = await x.json(); if (!x.ok) throw new Error(j.detail); return j; })
-    .then((j) => { setR(j); setErr(null); }).catch((e) => setErr(String(e.message || e)));
+    .then((j) => { setR(j); setErr(null); }).catch((e) => setErr(String(e.message || e))));
   // the baseline is frozen when the workspace opens
   useEffect(() => { run({}); }, []);   // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -120,10 +127,12 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
           <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 px-3 py-1 rounded bg-accent text-ink text-sm font-semibold">
             Simulated: predicted states after {r.horizon_h} h, not the observed transformer
           </div>
-          <div className="absolute top-3 left-3 z-10">
-            {gl && <button className="twin-btn" onClick={() => setXray(!xray)}>{xray ? "Solid tank" : "X-ray"}</button>}
+          <div className="absolute top-3 left-3 z-10 flex gap-2">
+            <button className={`twin-btn ${heat ? "twin-btn-primary" : ""}`} onClick={() => setHeat(!heat)}>
+              {heat ? "Back to model" : "Heat map"}</button>
+            {!heat && gl && <button className="twin-btn" onClick={() => setXray(!xray)}>{xray ? "Solid tank" : "X-ray"}</button>}
           </div>
-          {gl ? (
+          {heat ? <FemCompare res={femR} /> : gl ? (
             <Suspense fallback={<div className="p-6 text-dim text-sm">Loading 3D…</div>}>
               <Scene comps={comps} scale={r.components.scale} sel={sel} setSel={setSel} xray={xray} flyTo={null} resetKey={0} />
             </Suspense>

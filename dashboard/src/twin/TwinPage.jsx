@@ -4,6 +4,7 @@ import Ranked from "../eng/Ranked.jsx";
 import Corrective from "../eng/Corrective.jsx";
 import { FOCUS } from "./focus.js";
 import Schematic from "./Schematic.jsx";
+import HeatMapView from "./HeatMap.jsx";
 import { hotspotColor, STATE, VIOLET, webglAvailable } from "./states.js";
 
 const Scene = lazy(() => import("./Scene.jsx"));
@@ -35,7 +36,7 @@ function Dot({ state }) {
     style={{ background: s.color, boxShadow: state === "sensor" ? `0 0 0 2px ${VIOLET}` : "none" }} />;
 }
 
-function Legend({ scale }) {
+function Legend({ scale, fem }) {
   return (
     <Dock title="Legend">
       <ul className="space-y-1 text-xs">
@@ -53,6 +54,8 @@ function Legend({ scale }) {
           <span>{scale.cool_c} °C</span><span>{scale.hot_c} °C</span>
         </div>
         <div className="text-dim mt-1">Cool grey to orange; red is kept for alarms.</div>
+        {fem && <div className="text-dim mt-1">Windings are painted by height from the FEM field: the hottest
+          temperature across the winding at each height ({fem.mesh.elements_per_phase.toLocaleString()} elements per phase).</div>}
       </div>
     </Dock>
   );
@@ -170,6 +173,22 @@ export function useComponents(scen, cursor, version) {
   return d;
 }
 
+// FEM field at the cursor. Replay: every cursor move (the server caches).
+// Live: every LIVE_EVERY samples, or on demand, never on every sample.
+const LIVE_EVERY = 10;
+export function useFem(scen, cursor, version) {
+  const [d, setD] = useState(null);
+  const [nonce, setNonce] = useState(0);
+  const [count, setCount] = useState(0);
+  const live = scen === "live";
+  useEffect(() => { if (live) setCount((c) => c + 1); }, [version, live]);
+  const due = live ? Math.floor(count / LIVE_EVERY) : cursor;
+  useEffect(() => {
+    api(`${scen}/fem${live ? "" : `?t=${cursor}`}`).then(setD).catch(() => {});
+  }, [scen, due, nonce]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return [d, () => setNonce((k) => k + 1)];
+}
+
 function useRecommendations(scen, cursor, version) {
   const [r, setR] = useState({});
   useEffect(() => {
@@ -182,6 +201,8 @@ function useRecommendations(scen, cursor, version) {
 export default function TwinPage({ scen, cursor, version, header, simulateButton, override, onExitOverride }) {
   const observed = useComponents(scen, cursor, version);
   const recs = useRecommendations(scen, cursor, version);
+  const [fem, resolveFem] = useFem(scen, cursor, version);
+  const [heat, setHeat] = useState(false);
   const data = override || observed;                 // a simulation never replaces the observed fetch
   const [sel, setSel] = useState(null);
   const [xray, setXray] = useState(false);
@@ -218,7 +239,7 @@ export default function TwinPage({ scen, cursor, version, header, simulateButton
             )}
             {data.stale && <p className="text-xs mt-2 text-dim">No recent data: every assessed part is grey.</p>}
           </Dock>
-          <Legend scale={data.scale} />
+          <Legend scale={data.scale} fem={!sim && fem} />
           <ComponentList list={data.components} sel={sel} setSel={setSel} />
         </aside>
 
@@ -230,19 +251,23 @@ export default function TwinPage({ scen, cursor, version, header, simulateButton
           )}
           <div className="absolute top-3 left-3 z-10 flex gap-2">
             {simulateButton}
-            {use3d && <button className="twin-btn" onClick={() => setXray(!xray)}>{xray ? "Solid tank" : "X-ray"}</button>}
-            {use3d && <button className="twin-btn" onClick={() => setResetKey((k) => k + 1)}>Reset camera</button>}
-            {gl && <button className="twin-btn" onClick={() => setForce2d(!force2d)}>{force2d ? "3D model" : "2D schematic"}</button>}
+            <button className={`twin-btn ${heat ? "twin-btn-primary" : ""}`} onClick={() => setHeat(!heat)}>
+              {heat ? "Back to model" : "Heat map"}</button>
+            {!heat && use3d && <button className="twin-btn" onClick={() => setXray(!xray)}>{xray ? "Solid tank" : "X-ray"}</button>}
+            {!heat && use3d && <button className="twin-btn" onClick={() => setResetKey((k) => k + 1)}>Reset camera</button>}
+            {!heat && gl && <button className="twin-btn" onClick={() => setForce2d(!force2d)}>{force2d ? "3D model" : "2D schematic"}</button>}
           </div>
-          {use3d ? (
+          {heat ? (
+            <HeatMapView fem={sim ? null : fem} live={scen === "live"} onResolve={resolveFem} />
+          ) : use3d ? (
             <Suspense fallback={<div className="p-6 text-dim text-sm">Loading 3D…</div>}>
               <Scene comps={comps} scale={data.scale} sel={sel} setSel={setSel} xray={xray} flyTo={fly}
-                resetKey={resetKey} onTriangles={setTri} />
+                resetKey={resetKey} onTriangles={setTri} fem={sim ? null : fem} />
             </Suspense>
           ) : (
             <Schematic comps={comps} scale={data.scale} sel={sel} setSel={setSel} forced={gl && force2d} />
           )}
-          {use3d && (
+          {!heat && use3d && (
             <div className="absolute bottom-2 right-3 text-xs text-dim tabular-nums">
               {tri.toLocaleString()} triangles · drag to rotate, scroll to zoom, right-drag to pan
             </div>

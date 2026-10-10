@@ -39,7 +39,9 @@ if (mode === "live") {
   await page.waitForTimeout(Number(arg("wait", 4000)));
 }
 if (scenario) {
-  await page.selectOption("header select:last-of-type", scenario);
+  // the header has two selects (scenario, kVA): pick the one that offers this scenario
+  await page.locator("header select", { has: page.locator("option", { hasText: new RegExp(`^${scenario}$`) }) })
+    .first().selectOption(scenario);
   await page.waitForTimeout(500);
   await page.waitForFunction(() => !document.body.innerText.includes("Loading twin"), null, { timeout: 30000 });
 }

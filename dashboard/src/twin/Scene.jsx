@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { CylinderGeometry, Float32BufferAttribute } from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CameraControls, Html, Outlines } from "@react-three/drei";
 import { hotspotColor, reducedMotion, SELECT, STATE, VIOLET } from "./states.js";
@@ -9,7 +10,7 @@ import { hotspotColor, reducedMotion, SELECT, STATE, VIOLET } from "./states.js"
 
 import { FOCUS, PHASE_X } from "./focus.js";
 
-function Part({ comp, selected, hovered, xray, children, geometry, position, rotation, color, opacity = 1 }) {
+function Part({ comp, selected, hovered, xray, children, geometry, position, rotation, color, opacity = 1, vertexColors = false }) {
   const mat = useRef();
   const motion = !reducedMotion();
   useFrame(({ clock }) => {
@@ -20,18 +21,48 @@ function Part({ comp, selected, hovered, xray, children, geometry, position, rot
       : base;
   });
   const st = comp ? STATE[comp.state] : STATE.grey;
-  const c = color || st.color;
+  const c = vertexColors ? "#ffffff" : color || st.color;
   // an alarmed part always carries a red outline; the pulse is on top of it
   const outline = selected ? SELECT : comp?.state === "sensor" ? VIOLET : comp?.pulse ? STATE.red.color : null;
   return (
     <mesh position={position} rotation={rotation} castShadow>
       {geometry}
-      <meshStandardMaterial ref={mat} color={c} emissive={comp?.pulse ? STATE.red.color : c} emissiveIntensity={0.05} roughness={0.6}
+      <meshStandardMaterial ref={mat} color={c} vertexColors={vertexColors}
+        emissive={comp?.pulse ? STATE.red.color : vertexColors ? "#000000" : c} emissiveIntensity={0.05} roughness={0.6}
         metalness={0.15} transparent={opacity < 1} opacity={opacity} depthWrite={opacity >= 1} side={2} />
       {outline && <Outlines thickness={selected ? 0.014 : comp?.pulse ? 0.02 : 0.01} color={outline} screenspace={false} />}
       {children}
     </mesh>
   );
+}
+
+// An open cylinder painted by height from an FEM axial profile: vertex y maps
+// linearly onto the winding block's own z span (profile[0] at the bottom).
+function gradedCylinder(radius, height, profile, scale) {
+  const n = profile.length - 1;
+  const g = new CylinderGeometry(radius, radius, height, 32, n, true);
+  const pos = g.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  for (let k = 0; k < pos.count; k++) {
+    const f = Math.min(Math.max(pos.getY(k) / height + 0.5, 0), 1) * n;
+    const j = Math.min(Math.floor(f), n - 1), u = f - j;
+    const v = profile[j] * (1 - u) + profile[j + 1] * u;
+    const m = hotspotColor(v, scale).match(/\d+/g).map((x) => Number(x) / 255);
+    // sRGB -> linear, since three treats vertex colours as linear
+    col.set(m.map((x) => (x <= 0.04045 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)), 3 * k);
+  }
+  g.setAttribute("color", new Float32BufferAttribute(col, 3));
+  return g;
+}
+
+function Winding({ p, radius, height, x, profile, scale }) {
+  const geo = useMemo(() => (profile ? gradedCylinder(radius, height, profile, scale) : null), [radius, height, profile, scale]);
+  useEffect(() => () => geo?.dispose(), [geo]);
+  if (!geo) {
+    return <Part {...p} color={hotspotColor(p.comp?.hotspot_c, scale)} position={[x, 0.55, 0]}
+      geometry={<cylinderGeometry args={[radius, radius, height, 28, 1, true]} />} />;
+  }
+  return <Part {...p} vertexColors position={[x, 0.55, 0]} geometry={<primitive object={geo} attach="geometry" />} />;
 }
 
 function Comp({ id, comps, sel, setSel, hover, setHover, children }) {
@@ -57,7 +88,8 @@ function Comp({ id, comps, sel, setSel, hover, setHover, children }) {
   );
 }
 
-function Transformer({ comps, scale, sel, setSel, hover, setHover, xray }) {
+function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem }) {
+  const prof = (ph, w) => fem?.phases?.[ph.toUpperCase()]?.blocks?.[w]?.axial_max_c || null;
   const P = { comps, sel, setSel, hover, setHover };
   const shell = xray ? 0.12 : 1;
   const fins = useMemo(() => Array.from({ length: 7 }, (_, k) => -0.42 + k * 0.14), []);
@@ -84,12 +116,10 @@ function Transformer({ comps, scale, sel, setSel, hover, setHover, xray }) {
       {["r", "y", "b"].map((ph) => (
         <group key={ph}>
           <Comp id={`lv_winding_${ph}`} {...P}>{(p) => (
-            <Part {...p} color={hotspotColor(p.comp?.hotspot_c, scale)} position={[PHASE_X[ph], 0.55, 0]}
-              geometry={<cylinderGeometry args={[0.1, 0.1, 0.56, 28, 1, true]} />} />
+            <Winding p={p} radius={0.1} height={0.56} x={PHASE_X[ph]} profile={prof(ph, "lv")} scale={scale} />
           )}</Comp>
           <Comp id={`hv_winding_${ph}`} {...P}>{(p) => (
-            <Part {...p} color={hotspotColor(p.comp?.hotspot_c, scale)} position={[PHASE_X[ph], 0.55, 0]}
-              geometry={<cylinderGeometry args={[0.155, 0.155, 0.62, 32, 1, true]} />} />
+            <Winding p={p} radius={0.155} height={0.62} x={PHASE_X[ph]} profile={prof(ph, "hv")} scale={scale} />
           )}</Comp>
         </group>
       ))}
@@ -180,7 +210,7 @@ function Rig({ controls, fly, onStats }) {
   return null;
 }
 
-export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey, onTriangles }) {
+export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey, onTriangles, fem }) {
   const [hover, setHover] = useState(null);
   const controls = useRef();
   useEffect(() => { controls.current?.reset(true); }, [resetKey]);
@@ -191,7 +221,7 @@ export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey
       <hemisphereLight args={["#dfe7ef", "#1b222b", 0.8]} />
       <directionalLight position={[3, 4, 2]} intensity={1.4} castShadow />
       <directionalLight position={[-3, 2, -2]} intensity={0.4} />
-      <Transformer comps={comps} scale={scale} sel={sel} setSel={setSel} hover={hover} setHover={setHover} xray={xray} />
+      <Transformer comps={comps} scale={scale} sel={sel} setSel={setSel} hover={hover} setHover={setHover} xray={xray} fem={fem} />
       <CameraControls ref={controls} minDistance={1.2} maxDistance={6} />
       <Rig controls={controls} fly={flyTo} onStats={onTriangles} />
     </Canvas>
