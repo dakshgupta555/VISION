@@ -4,7 +4,7 @@ import { ModeSwitch } from "../live.jsx";
 export function NavTabs({ view, setView }) {
   return (
     <nav className="flex gap-1 text-sm">
-      {[["dashboard", "Dashboard"], ["twin", "Digital twin"]].map(([k, label]) => (
+      {[["dashboard", "Dashboard"], ["twin", "Digital twin"], ["engineering", "Engineering"]].map(([k, label]) => (
         <button key={k} onClick={() => setView(k)}
           className={`px-3 py-1 rounded ${view === k ? "bg-edge text-fg" : "text-dim hover:text-fg"}`}>{label}</button>
       ))}

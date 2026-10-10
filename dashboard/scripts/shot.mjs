@@ -52,8 +52,8 @@ if (t !== null) {
   }, String(t));
 }
 if (mode !== "live") await page.waitForLoadState("networkidle");   // an SSE stream never goes idle
-if (view === "twin") {
-  await page.getByRole("button", { name: "Digital twin", exact: true }).first().click();
+if (view === "twin" || view === "engineering") {
+  await page.getByRole("button", { name: view === "twin" ? "Digital twin" : "Engineering", exact: true }).first().click();
   await page.waitForTimeout(Number(arg("twinwait", 5000)));
   if (select) { await page.getByRole("button", { name: select }).first().click(); await page.waitForTimeout(1500); }
   for (const b of (arg("click", "") || "").split(",").filter(Boolean)) {   // e.g. --click "X-ray,Simulate"

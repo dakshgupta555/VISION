@@ -205,6 +205,26 @@ async def simulate_route(name: str, request: Request, kva: Optional[float] = Non
     return simulate(tw, i, body.get("inputs") or {}, horizon_h=float(body.get("horizon_h", 24)))
 
 
+@app.get("/api/{name}/curves")
+def curves_route(name: str, kva: Optional[float] = None, n1: Optional[float] = None, area_cm2: Optional[float] = None,
+                 path_m: Optional[float] = None, gap_mm: Optional[float] = None, load_pct: float = 100.0,
+                 pf: float = 0.9, lagging: bool = True):
+    """B-H, excitation (V-I) and voltage-transfer characteristics. Design
+    parameters are illustrative and can be overridden."""
+    from ..twin.engineering import curves
+    tw = _twin(name, kva)
+    design = {"n1_turns": n1, "a_core_m2": None if area_cm2 is None else area_cm2 / 1e4,
+              "l_core_m": path_m, "gap_mm": gap_mm}
+    return curves(tw.np_, design, load_pct=load_pct, pf=pf, lagging=lagging)
+
+
+@app.get("/api/{name}/losses")
+def losses_route(name: str, t: Optional[str] = None, kva: Optional[float] = None, pf: float = 0.9):
+    from ..twin.engineering import losses
+    tw = _twin(name, kva)
+    return losses(tw, tw.locate(_cursor(t)), pf=pf)
+
+
 @app.get("/api/{name}/alerts")
 def alerts(name: str):
     from .engine import _alert_json

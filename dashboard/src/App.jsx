@@ -15,6 +15,7 @@ import {
 import { InjectPanel, LiveBar, ModeSwitch, useLive } from "./live.jsx";
 import TwinPage from "./twin/TwinPage.jsx";
 import SimulateWorkspace from "./twin/Simulate.jsx";
+import EngineeringPage from "./eng/EngineeringPage.jsx";
 import TwinBar, { NavTabs } from "./twin/TwinBar.jsx";
 
 // ---------------------------------------------------------------- 1. header
@@ -385,6 +386,13 @@ function Board({ s, series, scen, mode, setMode, live, view, setView, scenarios,
   recorded, tl, i, setI, playing, setPlaying, speed, setSpeed }) {
   const stale = mode === "live" && Boolean(live.status?.stale);
   const [simAt, setSimAt] = useState(null);       // baseline cursor frozen when Simulate opens
+  if (view === "engineering") {
+    return (
+      <EngineeringPage scen={scen} cursor={s.i}
+        header={<TwinBar s={s} view={view} setView={setView} mode={mode} setMode={setMode} live={live}
+          tl={tl} i={i} setI={setI} playing={playing} setPlaying={setPlaying} />} />
+    );
+  }
   if (view === "twin" && simAt !== null) {
     return <SimulateWorkspace scen={scen} cursor={simAt} onExit={() => setSimAt(null)} />;
   }
