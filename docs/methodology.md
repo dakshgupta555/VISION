@@ -145,9 +145,9 @@ Linear between the anchors; ageing on log2 because it doubles every ~7 K.
 
 | Component | Quantity | 100 at | 0 at (alarm fires) | Weight |
 |---|---|---|---|---|
-| Thermal ageing | F_AA, instant | <= 1/8 pu (hot-spot ~91 C) | 1.0 pu (hot-spot 110 C: shed advice) | 0.30 |
+| Thermal ageing | F_AA, instant, log2 | <= 0.5 (hot-spot 103.3 C, half the rated wear rate) | 2.71 (hot-spot 120 C: the hot-spot alarm) | 0.30 |
 | Cooling | rise-fit slope | <= 1.025 (healthy p95) | 1.06 (cooling alarm) | 0.25 |
-| Loading | K, instant | <= 0.80 pu | 1.00 pu (overload alarm) | 0.20 |
+| Loading | K, instant, piecewise linear | <= 0.90 pu | 1.50 pu; 50 at 1.00 pu, where the overload alarm fires | 0.20 |
 | Measurement integrity | channels trusted, 1 h mean | all present channels | one channel short (sensor alarm) | 0.15 |
 | Unbalance | max phase deviation from standing | <= 1.45 % (healthy p95) | 4.0 % (unbalance / CT call) | 0.10 |
 
@@ -169,10 +169,10 @@ the 1.06 alarm, and including it turned the index red on 0.4 % of healthy
 samples. Each component is still shown on its own, and the dashboard says
 when the cap holds the index down.
 
-Consequence to know: at exactly rated load and 30 C ambient the hot-spot is
-110.0 C, so ageing and loading both score 0; the weighted mean is 50 and the
-index is held at 10. Whether rated load should score that low is an open
-decision (see results.md, "Health index at rated load").
+Ageing and loading anchors were set by team decision on 2026-10-11 (results.md,
+"Health index by load"): ageing reaches 0 at the 120 C hot-spot alarm rather
+than at the 110 C ageing reference, and loading is 50 at rated load, so a unit
+at exactly rated load and 30 C ambient reads 60 (amber), not 10.
 
 ## 6. Decision outputs
 

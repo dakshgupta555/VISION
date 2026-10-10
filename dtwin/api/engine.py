@@ -18,9 +18,9 @@ where it does not. Linear in between; ageing on log2 because it doubles every
 ~7 K.
 
     component   quantity (instant unless noted)    100 at          0 at (fires)                    weight
-    ageing      ageing factor F_AA                  <= 1/8 pu       1.0 pu, hot-spot 110 C (shed)   0.30
+    ageing      ageing factor F_AA (log2)           <= 0.5 (103 C)  2.71, hot-spot 120 C (alarm)    0.30
     cooling     rise-fit slope                      <= 1.025        1.06 (cooling alarm)            0.25
-    loading     load ratio K                        <= 0.80 pu      1.00 pu (overload alarm)        0.20
+    loading     load ratio K                        <= 0.90 pu      1.50 pu; 50 at 1.00 (overload)  0.20
     integrity   channels trusted, last 1 h mean     8 of 8          7 of 8 (sensor alarm)           0.15
     unbalance   max phase deviation from standing   <= 1.45 %       4.0 % (unbalance/CT call)       0.10
 
@@ -54,10 +54,18 @@ from ..physics.thermal import (ThermalModel, ThermalState, hotspot_rise_ultimate
 DATA = Path(__file__).resolve().parents[2] / "data"
 
 _CFG = ValidationConfig()
-HEALTH = [  # key, weight, value-at-100, value-at-0 (= alarm threshold), unit, label
-    ("ageing", 0.30, 1.0 / 8, 1.0, "pu", "Thermal ageing (F_AA)"),
+# Ageing: 100 at half the rated wear rate (F_AA 0.5, hot-spot 103.3 C), 0 at
+# the 120 C hot-spot alarm (config/components.yaml winding.hotspot_alarm_c),
+# linear in log2 F_AA. Rated load at 30 C (110 C, F_AA 1) scores 59.
+HOTSPOT_ALARM_C = 120.0
+FAA_ALARM = float(ageing_factor(HOTSPOT_ALARM_C, preset(100)))     # 2.709; F_AA does not depend on rating
+# Loading: piecewise linear through these (K pu, score) points. The overload
+# alarm fires above 1.0 pu, where the score is 50.
+LOADING_POINTS = ((0.9, 100.0), (1.0, 50.0), (1.5, 0.0))
+HEALTH = [  # key, weight, value-at-100, value-at-0, unit, label
+    ("ageing", 0.30, 0.5, FAA_ALARM, "pu", "Thermal ageing (F_AA)"),
     ("cooling", 0.25, 1.025, 1.0 + _CFG.slope_limit, "", "Cooling (rise-fit slope)"),
-    ("loading", 0.20, 0.80, _CFG.overload_pu, "pu", "Loading (K)"),
+    ("loading", 0.20, LOADING_POINTS[0][0], LOADING_POINTS[-1][0], "pu", "Loading (K)"),
     ("integrity", 0.15, 100.0, 100.0 * 7 / 8, "%", "Measurement integrity (1 h)"),
     ("unbalance", 0.10, 1.45, 100.0 * _CFG.current_dev_limit, "%", "Phase deviation"),
 ]
@@ -66,6 +74,15 @@ HEALTH = [  # key, weight, value-at-100, value-at-0 (= alarm threshold), unit, l
 # weighted mean alone cannot fall below 50 while the other three components
 # stay healthy, even with a 200 C hot-spot.
 SAFETY_CRITICAL = ("ageing", "loading")
+# How each score runs, in words, for the dashboard and the PDF.
+SCALE = {
+    "ageing": "100 at F_AA 0.5 or less (hot-spot 103 °C, half the rated wear rate), "
+              "0 at F_AA {bad:.2f} (the 120 °C hot-spot alarm); log scale between",
+    "cooling": "100 at slope {good:.3f} or less (healthy p95), 0 at {bad:.2f} (the cooling alarm)",
+    "loading": "100 at 0.90 pu or less, 50 at 1.00 pu (the overload alarm), 0 at 1.50 pu; linear between",
+    "integrity": "100 with every channel trusted, 0 one channel short (the sensor alarm)",
+    "unbalance": "100 at {good:.2f} % or less (healthy p95), 0 at {bad:.1f} % (the unbalance / CT call)",
+}
 CAP_MARGIN = 10.0
 
 
@@ -250,9 +267,14 @@ class Twin:
                 comps.append({"key": key, "label": label + " - unavailable", "value": None,
                               "unit": unit, "score": None, "weight": wt, "good": good, "bad": bad})
                 continue
-            sc = _score(vals[key], good, bad, log2=(key == "ageing"))
+            if key == "loading":
+                x, y = zip(*LOADING_POINTS)
+                sc = float(np.interp(vals[key], x, y)) if np.isfinite(vals[key]) else None
+            else:
+                sc = _score(vals[key], good, bad, log2=(key == "ageing"))
             comps.append({"key": key, "label": label, "value": _f(vals[key], 3), "unit": unit,
-                          "score": _f(sc, 0), "weight": wt, "good": good, "bad": bad})
+                          "score": _f(sc, 0), "weight": wt, "good": good, "bad": bad,
+                          "scale": SCALE.get(key, "").format(good=good, bad=bad)})
             if sc is not None:
                 tot += wt * sc
                 wsum += wt

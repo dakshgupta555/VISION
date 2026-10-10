@@ -27,7 +27,7 @@ function HealthBreakdown({ s }) {
                 <span>{fmt(c.value, ND[c.unit] ?? 3)} {c.unit}: <b className={b === "ok" ? "" : TEXT[b]}>{fmt(c.score, 0)}</b></span>
               </div>
               <div className="h-2 rounded-full bg-ink mt-1"><div className={`h-2 rounded-full ${BG[b]}`} style={{ width: `${Math.max(c.score ?? 0, 3)}%` }} /></div>
-              <div className="text-sm text-dim mt-0.5">100 at {fmt(c.good, ND[c.unit] ?? 3)}, 0 at {fmt(c.bad, ND[c.unit] ?? 3)} (where its alarm fires)</div>
+              <div className="text-sm text-dim mt-0.5">{c.scale}</div>
             </div>
           );
         })}

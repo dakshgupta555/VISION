@@ -94,5 +94,24 @@ check("above 140 C: 'protection would trip' shown and no ageing or cost accrues"
       and so.rows.aged_h[so.rows.beyond_trip].sum() == 0 and st["life"]["since_start"]["beyond_trip_h"] > 0,
       f"{st['life']['since_start']['beyond_trip_h']} h above 140 C not counted")
 
+# ---- decided anchors (2026-10-11): index at 30 C ambient, steady state, healthy otherwise ------
+import numpy as np
+from dtwin.api import engine as E
+from dtwin.physics.ageing import ageing_factor
+
+
+def index_at(k):
+    np_ = so.np_
+    faa = float(ageing_factor(E.steady_hotspot_cf(k, 1.0, 30.0, 1.0, np_), np_))
+    sc = {"ageing": E._score(faa, 0.5, E.FAA_ALARM, log2=True),
+          "loading": float(np.interp(k, *zip(*E.LOADING_POINTS))), "cooling": 100, "integrity": 100, "unbalance": 100}
+    W = {key: w for key, w, *_ in E.HEALTH}
+    mean = sum(W[c] * sc[c] for c in W) / sum(W.values())
+    return round(min(mean, min(sc["ageing"], sc["loading"]) + E.CAP_MARGIN))
+
+
+got = {k: index_at(k) for k in (0.9, 1.0, 1.3)}
+check("health at 30 C: 0.9 pu 100, rated 60 (amber), 1.3 pu 10 (red)", got == {0.9: 100, 1.0: 60, 1.3: 10}, str(got))
+
 print(f"\n  {sum(R)} of {len(R)} twin checks passed")
 sys.exit(0 if all(R) else 1)

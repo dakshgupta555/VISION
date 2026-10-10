@@ -24,7 +24,7 @@ export const HELP = {
     `${lim.alarm} °C is the IEC 60076-7 top-oil limit for normal cyclic loading; amber from ${lim.warn} °C.`,
   ],
   health: (comps, b) => [
-    "One 0-100 summary of five physical scores, each 0 exactly where its own alarm fires and 100 at healthy behaviour.",
+    "One 0-100 summary of five physical scores, each 100 at healthy behaviour and low where its own alarm fires: ageing reaches 0 at the 120 °C hot-spot alarm, loading is 50 at rated load (where the overload alarm fires) and 0 at 1.5 pu.",
     `Weighted: ${(comps || []).map((c) => `${c.label.split(" (")[0].toLowerCase()} ${Math.round(100 * c.weight)} %`).join(", ")}. `
       + "The index may not exceed the worse of the ageing and loading scores by more than 10, so an extreme hot-spot drives it near 0.",
     `Normal: ${b.warn_below} or more. Amber ${b.alarm_below}-${b.warn_below}, red below ${b.alarm_below}. Open Engineering details for each score.`,
@@ -56,8 +56,8 @@ export const HELP = {
     "A degraded cooling path scales the rise (slope a above 1); a drifting probe shifts it (intercept b). Normal: slope close to 1.00; the alarm is at 1.06.",
   ],
   healthBreakdown: [
-    "Each of the five scores is computed on the same quantity, at the same instant, that its alarm fires on, and is 0 exactly where that alarm fires.",
-    "100 comes from healthy behaviour (95th percentile of a healthy record) or from physics. Linear between the two; ageing on a log scale.",
+    "Each of the five scores is computed on the same quantity, at the same instant, that its alarm fires on. Cooling, integrity and unbalance are 0 exactly where their alarm fires; ageing is 0 at the 120 °C hot-spot alarm; loading is 50 where the overload alarm fires (rated load) and 0 at 1.5 pu.",
+    "100 comes from healthy behaviour (95th percentile of a healthy record) or from physics. Linear between; ageing on a log scale. The line under each bar gives its exact anchors.",
   ],
   life: (L) => [
     "Insulation life used, in equivalent hours at the rated hot-spot, and its value in rupees.",

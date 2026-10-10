@@ -535,7 +535,7 @@ export function Details({ s }) {
         <div className="grid md:grid-cols-5 gap-4">
           {s.health.components.map((c) => (
             <div key={c.key} className="text-[15px]">
-              <div className="text-dim text-sm" title={`${c.label}: 100 at ${fmt(c.good, ND[c.unit] ?? 3)}, 0 at ${fmt(c.bad, ND[c.unit] ?? 3)} ${c.unit}`}>{c.label.split(" (")[0]}</div>
+              <div className="text-dim text-sm" title={`${c.label}: ${c.scale}`}>{c.label.split(" (")[0]}</div>
               <div className="font-semibold">{fmt(c.score, 0)} <span className="text-dim font-normal text-sm">of 100, weight {Math.round(100 * c.weight)} %</span></div>
             </div>
           ))}

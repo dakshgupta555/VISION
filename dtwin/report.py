@@ -198,7 +198,7 @@ def build_story(tw, t=None):
     for a in s["alerts_live"][1:]:
         E.append(Paragraph(_e("Also: " + a["headline"]), BODY))
     E.append(Spacer(1, 4))
-    rows = [["Health component", "Value", "Score", "100 at", "0 at (alarm)", "Weight"]]
+    rows = [["Health component", "Value", "Score", "100 at", "0 at", "Weight"]]
     for c in s["health"]["components"]:
         nd = {"pu": 2, "%": 1}.get(c["unit"], 3)
         rows.append([_s(c["label"]), _s(f"{_f(c['value'], nd)} {c['unit']}"), _f(c["score"], 0),

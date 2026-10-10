@@ -50,7 +50,7 @@ most likely to be wrong on CPRI's data are marked **risk**.
 
 | Assumption | Why | If wrong |
 |---|---|---|
-| Index <= min(ageing, loading score) + 10 | an extreme hot-spot must drive the index near 0; a weighted mean alone cannot go below 50 | Judgement. With today's anchors a unit at exactly rated load scores 10 (ageing and loading both 0). |
+| Index <= min(ageing, loading score) + 10 | an extreme hot-spot must drive the index near 0; a weighted mean alone cannot go below 50 | Judgement. At 30 C ambient: rated load reads 60 (ageing 59, loading 50); from 1.1 pu (hot-spot past 120 C) it reads 10. |
 | Cooling not in the cap | its healthy scatter reaches the alarm level (slope 1.058 vs 1.06) | Including it turned the index red on 0.4 % of healthy samples. |
 
 ## Live mode

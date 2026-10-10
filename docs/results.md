@@ -147,28 +147,25 @@ At 48 C ambient the existing device trips with no load at all.
 | Split-window step scan (pre-registered, `results/prereg_split_step.md`) | cut wrong-family cooling alarms 66 % on a development set but raised in-sample false alarms from 0.00 % to 0.16 %, failing its pre-set rule; shipped switched off |
 | DGA, Duval triangle, harmonic derating | no dissolved-gas or harmonic data exists |
 
-## Health index at rated load (open decision, not applied)
+## Health index by load (decided 2026-10-11, applied)
 
-At exactly rated load and 30 C ambient, balanced, cooling as designed, the
-hot-spot is 110.0 C and F_AA = 1.000. Ageing scores 0 (its 0 is F_AA = 1.0) and
-loading scores 0 (its 0 is the 1.00 pu overload alarm).
+Ageing: 100 at F_AA 0.5 (hot-spot 103.3 C), 0 at the 120 C hot-spot alarm
+(F_AA 2.71), log2 between. Loading: 100 at 0.9 pu or less, 50 at 1.0 pu,
+0 at 1.5 pu, linear between. Cap on ageing and loading only. Steady state at
+30 C ambient, balanced, cooling as designed, all channels trusted:
 
-| Mapping | Ageing | Loading | Weighted mean | Index |
-|---|---|---|---|---|
-| As shipped (cap on ageing and loading) | 0 | 0 | 50 | **10** |
-| Before phase 4b (no cap) | 0 | 0 | 50 | 50 |
-| P1: ageing 100 at F_AA 1/8, 0 at F_AA 2.71 (120 C) | 32 | 0 | 60 | 10 |
-| P2: ageing 100 at F_AA 0.5 (103 C), 0 at 2.71 (120 C) | 59 | 0 | 68 | 10 |
-| P2 + loading 100 at 0.8, 0 at 1.2 pu | 59 | 50 | 78 | 60 |
-| P2, cap on ageing only | 59 | 0 | 68 | 68 |
+| Load | Hot-spot | F_AA | Ageing | Loading | Weighted mean | Index |
+|---|---|---|---|---|---|---|
+| 0.5 pu | 63.3 C | 0.004 | 100 | 100 | 100 | **100** |
+| 0.9 pu | 99.0 C | 0.315 | 100 | 100 | 100 | **100** |
+| 1.0 pu | 110.0 C | 1.000 | 59 | 50 | 78 | **60** (amber) |
+| 1.1 pu | 121.7 C | 3.19 | 0 | 40 | 58 | **10** (red: past the 120 C alarm) |
+| 1.3 pu | 147.1 C | 31.9 | 0 | 20 | 54 | **10** (red) |
+| 1.5 pu | 175.2 C | 298 | 0 | 0 | 50 | **10** (red) |
 
-Proposed (consistent with the 120 C hot-spot alarm in `config/components.yaml`
-and with "0 exactly where the alarm fires"): **P2**, ageing 0 at the 120 C
-alarm, 100 at half the rated wear rate. With P2 a 30 C-ambient unit scores
-ageing 100 up to 0.9 pu (hot-spot 99 C), 59 at 1.0 pu, 0 from 1.1 pu (122 C).
-Because loading is in the cap, rated load still reads 10 under P2 unless the
-cap is on ageing only or loading's anchors move too; that choice is the
-team's.
+`healthy.csv`, every sample: median 100, mean 99.6, 5th percentile 99,
+minimum 76; below 80 on 0.1 % of samples (cooling-slope scatter, as before).
+Before this decision rated load read 10 (ageing and loading both 0).
 
 ## Live fault check — `python check_live_faults.py` (120x, Inject-panel defaults)
 
