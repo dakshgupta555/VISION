@@ -14,6 +14,7 @@ import {
 } from "./features.jsx";
 import { InjectPanel, LiveBar, ModeSwitch, useLive } from "./live.jsx";
 import TwinPage from "./twin/TwinPage.jsx";
+import SimulateWorkspace from "./twin/Simulate.jsx";
 import TwinBar, { NavTabs } from "./twin/TwinBar.jsx";
 
 // ---------------------------------------------------------------- 1. header
@@ -383,9 +384,15 @@ export default function App() {
 function Board({ s, series, scen, mode, setMode, live, view, setView, scenarios, scenario, setScenario, kva, setKva,
   recorded, tl, i, setI, playing, setPlaying, speed, setSpeed }) {
   const stale = mode === "live" && Boolean(live.status?.stale);
+  const [simAt, setSimAt] = useState(null);       // baseline cursor frozen when Simulate opens
+  if (view === "twin" && simAt !== null) {
+    return <SimulateWorkspace scen={scen} cursor={simAt} onExit={() => setSimAt(null)} />;
+  }
   if (view === "twin") {
     return (
       <TwinPage scen={scen} cursor={s.i} version={`${s.timestamp}|${live.status?.stale}`}
+        simulateButton={<button className="twin-btn twin-btn-primary" onClick={() => { setPlaying(false); setSimAt(s.i); }}>
+          Simulate</button>}
         header={<TwinBar s={s} view={view} setView={setView} mode={mode} setMode={setMode} live={live}
           tl={tl} i={i} setI={setI} playing={playing} setPlaying={setPlaying} />} />
     );

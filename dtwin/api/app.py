@@ -14,7 +14,7 @@ from typing import Optional, Union
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -185,6 +185,17 @@ def components(name: str, t: Optional[str] = None, kva: Optional[float] = None):
         from ..live.api import STORE
         fresh = STORE.freshness()
     return TC.assess(TC.from_twin(tw, tw.locate(_cursor(t)), fresh))
+
+
+@app.post("/api/{name}/simulate")
+async def simulate_route(name: str, request: Request, kva: Optional[float] = None):
+    """An isolated what-if on a snapshot of the observed state at the cursor.
+    Never writes to the observed data."""
+    from ..twin.simulate import simulate
+    body = await request.json()
+    tw = _twin(name, kva)
+    i = tw.locate(_cursor(str(body["t"])) if body.get("t") is not None else None)
+    return simulate(tw, i, body.get("inputs") or {}, horizon_h=float(body.get("horizon_h", 24)))
 
 
 @app.get("/api/{name}/alerts")

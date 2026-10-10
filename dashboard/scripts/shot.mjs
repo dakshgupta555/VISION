@@ -17,6 +17,7 @@ const scenario = arg("scenario", null);
 const mode = arg("mode", null);                 // "live" clicks the Live switch
 const view = arg("view", null);                 // "twin" opens the Digital twin page
 const select = arg("select", null);             // a component name to click in the list
+const slider = arg("slider", null);             // "index=value": set the n-th range input after clicks
 const out = arg("out", "../screens/dashboard.png");
 const clip = arg("clip", null);
 const width = Number(arg("width", 1440)), height = Number(arg("height", 900));
@@ -55,9 +56,17 @@ if (view === "twin") {
   await page.getByRole("button", { name: "Digital twin", exact: true }).first().click();
   await page.waitForTimeout(Number(arg("twinwait", 5000)));
   if (select) { await page.getByRole("button", { name: select }).first().click(); await page.waitForTimeout(1500); }
-  for (const b of (arg("click", "") || "").split(",").filter(Boolean)) {   // e.g. --click "X-ray,2D schematic"
+  for (const b of (arg("click", "") || "").split(",").filter(Boolean)) {   // e.g. --click "X-ray,Simulate"
     await page.getByRole("button", { name: b, exact: true }).first().click(); await page.waitForTimeout(1200);
   }
+}
+if (slider) {
+  const [idx, val] = slider.split("=");
+  await page.$$eval("input[type=range]", (els, [k, v]) => {
+    const el = els[Number(k)]; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    set.call(el, v); el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, [idx, val]);
+  await page.waitForTimeout(2500);
 }
 await page.waitForTimeout(800);                 // charts settle
 
