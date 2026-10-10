@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { api } from "../ui.jsx";
 import Ranked from "../eng/Ranked.jsx";
+import Corrective from "../eng/Corrective.jsx";
 import { FOCUS } from "./focus.js";
 import Schematic from "./Schematic.jsx";
 import { hotspotColor, STATE, VIOLET, webglAvailable } from "./states.js";
@@ -84,7 +85,7 @@ function ComponentList({ list, sel, setSel }) {
   );
 }
 
-function Inspector({ c, simulated }) {
+function Inspector({ c, simulated, rec }) {
   if (!c) {
     return (
       <Dock title="Inspector">
@@ -143,6 +144,11 @@ function Inspector({ c, simulated }) {
           <ul className="text-xs list-disc ml-4">{c.verification.map((h) => <li key={h}>{h}</li>)}</ul>
         </Section>
       )}
+      {rec && !simulated && (
+        <Section title="Corrective action">
+          <Corrective rec={rec} />
+        </Section>
+      )}
       {(c.missing.length > 0 || c.limits.length > 0) && (
         <Section title="Missing evidence and model limits">
           <ul className="text-xs list-disc ml-4 text-dim">
@@ -164,8 +170,18 @@ export function useComponents(scen, cursor, version) {
   return d;
 }
 
+function useRecommendations(scen, cursor, version) {
+  const [r, setR] = useState({});
+  useEffect(() => {
+    api(`${scen}/agents${scen === "live" ? "" : `?t=${cursor}`}`)
+      .then((d) => setR(Object.fromEntries(d.agents.recommendation.map((x) => [x.component_id, x])))).catch(() => {});
+  }, [scen, cursor, version]);
+  return r;
+}
+
 export default function TwinPage({ scen, cursor, version, header, simulateButton, override, onExitOverride }) {
   const observed = useComponents(scen, cursor, version);
+  const recs = useRecommendations(scen, cursor, version);
   const data = override || observed;                 // a simulation never replaces the observed fetch
   const [sel, setSel] = useState(null);
   const [xray, setXray] = useState(false);
@@ -235,7 +251,7 @@ export default function TwinPage({ scen, cursor, version, header, simulateButton
 
         <aside className="border-l border-edge overflow-y-auto">
           {onExitOverride}
-          <Inspector c={sel ? comps[sel] : null} simulated={sim} />
+          <Inspector c={sel ? comps[sel] : null} simulated={sim} rec={sel ? recs[sel] : null} />
         </aside>
       </div>
     </div>

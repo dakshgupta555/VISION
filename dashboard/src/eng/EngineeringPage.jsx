@@ -291,9 +291,39 @@ function Diagnostics({ scen, cursor, version }) {
   );
 }
 
+// ---------------------------------------------------------------- structured agent output
+function Agents({ scen, cursor, version }) {
+  const [d, setD] = useState(null);
+  useEffect(() => { api(`${scen}/agents${scen === "live" ? "" : `?t=${cursor}`}`).then(setD).catch(() => {}); }, [scen, cursor, version]);
+  if (!d) return <p className="text-dim text-sm">Running the agents…</p>;
+  const names = { observation: "Observation", physics: "Physics", diagnostic: "Diagnostic", recommendation: "Recommendation" };
+  const note = { observation: "ingestion and data-quality flags", physics: "circuit, thermal and magnetic calculations",
+    diagnostic: "the detector, residuals and ranked hypotheses", recommendation: "rules and the catalogue" };
+  return (
+    <div>
+      <p className="text-sm text-dim mb-3">{d.method}. Each record has the same fields: asset, component, observations,
+        calculations, deviations, hypotheses, evidence coverage, recommended action and additional evidence required.</p>
+      {Object.entries(d.agents).map(([k, recs]) => (
+        <Card key={k} title={`${names[k]} agent`} note={`Wraps ${note[k]}. ${recs.length} record(s).`}>
+          {recs.filter((r) => k !== "diagnostic" || r.state !== "grey").map((r, j) => (
+            <details key={j} className="border-t border-edge py-1.5">
+              <summary className="text-sm cursor-pointer">
+                <span className="text-dim tabular-nums">{r.component_id || "asset"}</span> · {r.explanation}
+              </summary>
+              <pre className="text-[11px] bg-ink border border-edge rounded p-2 mt-1 overflow-x-auto">{JSON.stringify(r, null, 2)}</pre>
+            </details>
+          ))}
+          {k === "diagnostic" && <p className="text-xs text-dim mt-1">Grey (not assessed) components are hidden here; they are in the JSON from /api/{scen}/agents.</p>}
+        </Card>
+      ))}
+    </div>
+  );
+}
+
 export default function EngineeringPage({ scen, cursor, version, header, extraTabs = [] }) {
   const [tab, setTab] = useState("curves");
   const tabs = [["curves", "Characteristic curves"], ["losses", "Losses and efficiency"], ["diagnostics", "Diagnostics"],
+    ["agents", "Structured output"],
     ...extraTabs.map((t) => [t.key, t.label])];
   const extra = extraTabs.find((t) => t.key === tab);
   return (
@@ -302,7 +332,8 @@ export default function EngineeringPage({ scen, cursor, version, header, extraTa
       <div className="max-w-6xl mx-auto px-4 py-4">
         <Tabs tabs={tabs} value={tab} onChange={setTab} />
         {tab === "curves" ? <Curves scen={scen} /> : tab === "losses" ? <Losses scen={scen} cursor={cursor} />
-          : tab === "diagnostics" ? <Diagnostics scen={scen} cursor={cursor} version={version} /> : extra?.render()}
+          : tab === "diagnostics" ? <Diagnostics scen={scen} cursor={cursor} version={version} />
+            : tab === "agents" ? <Agents scen={scen} cursor={cursor} version={version} /> : extra?.render()}
       </div>
     </div>
   );
