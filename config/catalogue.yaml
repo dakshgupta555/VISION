@@ -1,0 +1,156 @@
+# Corrective-action catalogue. The ONLY source of part and material
+# specifications the twin shows. Entries are generic for a 100 kVA 11 kV/433 V
+# ONAN distribution transformer; where the OEM manual or drawing applies, the
+# entry says so. Verify every referenced standard against its current edition.
+#
+# The twin is advisory: it never operates equipment and never authorises a
+# transformer to remain in service.
+
+common_safety: &safety
+  - Work only under a permit-to-work issued by the authorised person.
+  - Isolate HV and LV, prove dead, and apply earths at the point of work before touching any live-part enclosure.
+  - Lock out and tag the HV switch (or drop-out fuses) and the LV breaker.
+  - Never open the tank or conservator, or drain oil, while the unit is energised.
+
+conditions:
+  cooling_degraded:
+    title: Cooling path degraded
+    inspection:
+      - Inspect the radiator fins for dust, debris, bird nests or paint build-up.
+      - Check that every radiator isolating valve is fully open.
+      - Read the conservator oil gauge (a low level reduces circulation).
+      - Thermal image of the radiators under load; compare the top-to-bottom gradient across radiators.
+    corrective:
+      - Clean the fins (low-pressure water or air; no solvents on gaskets).
+      - Re-open any partly closed valve and record it.
+      - If the oil level is low, treat it as a possible leak (see \"Oil level to be checked\" below) before topping up.
+    qualification: [Substation maintenance technician; oil handling requires a trained person.]
+    safety: *safety
+    materials:
+      - {item: Fin cleaning, specification: "Clean water or dry compressed air at low pressure", note: "no specification beyond care for the gaskets"}
+    notes: "Confirm the improvement afterwards on the twin: the rise-fit slope should return towards 1.0 within about a day."
+
+  oil_level_check:
+    title: Oil level to be checked (possible leak)
+    indication_vs_source: >-
+      The twin has an INDICATION only (reduced cooling, which low oil can cause). A leak is CONFIRMED only by a low
+      gauge reading together with a located source: wipe the suspect joints clean, re-inspect after a load cycle,
+      and identify the actual weeping gasket, valve or weld. Do not replace parts on the indication alone.
+    inspection:
+      - Read the conservator oil gauge against the temperature marks.
+      - Look for oil stains at gaskets, the drain valve, the radiator joints, bushings and welds; clean and re-check.
+    corrective:
+      - Repair the confirmed source first (gasket or valve replacement, or weld repair by the OEM).
+      - Top up with oil meeting the specification below, tested before filling.
+    qualification: [Substation maintenance technician; weld repairs by the OEM or an approved workshop.]
+    safety: *safety
+    materials:
+      - {item: Insulating oil, specification: "New mineral insulating oil to IS 335 (verify current edition); breakdown voltage tested before filling", note: "do not mix with oil of unknown type"}
+      - {item: Gaskets, specification: "OEM part for the specific joint (nitrile or cork-nitrile as originally fitted)", note: "sizes are joint-specific; take them from the OEM drawing"}
+
+  winding_overload:
+    title: Windings overloaded
+    inspection:
+      - Confirm the load with a clamp meter on each LV phase.
+      - Review the feeder load and any switching that transferred load.
+    corrective:
+      - Shed or transfer load until the twin's safe-load figure is met.
+      - If the overload recurs at the same hour, plan load transfer or a larger transformer.
+    qualification: [Distribution engineer for load transfer; operator for switching under instruction.]
+    safety: *safety
+    materials: []
+    notes: "Load management, not repair. No winding work is indicated by an overload alone."
+
+  phase_unbalance:
+    title: Phase load unbalance
+    inspection:
+      - Survey single-phase loads per phase on the LV feeder.
+      - Check the LV terminals and lugs of the most loaded phase.
+    corrective:
+      - Redistribute single-phase service connections across R, Y and B.
+    qualification: [Line staff under the distribution engineer.]
+    safety: *safety
+    materials: []
+
+  connection_resistance:
+    title: High-resistance LV connection suspected
+    inspection:
+      - Thermal image of the LV bushing, lug and cable termination of the flagged phase under load.
+      - At an outage, measure the joint resistance with a micro-ohmmeter and compare phases.
+    corrective:
+      - Clean and re-make the joint; tighten to the torque in the OEM manual.
+      - Replace a damaged lug with one matching the conductor.
+    qualification: [Substation maintenance technician.]
+    safety: *safety
+    materials:
+      - {item: Cable lug, specification: "Matching the conductor's material and cross-section; bimetallic where copper meets aluminium", note: "take the size from the cable, never from a neighbouring phase by assumption"}
+      - {item: Contact compound, specification: "Joint compound suitable for the conductor material", note: ""}
+
+  winding_repair:
+    title: Winding repair (only after tests confirm a winding fault)
+    inspection:
+      - Winding resistance, turns ratio and insulation resistance tests; DGA of the oil.
+    corrective:
+      - Rewinding or repair by the OEM or an approved repair workshop.
+    qualification: [OEM or approved transformer repair workshop.]
+    safety: *safety
+    materials:
+      - {item: Winding conductor, specification: "Same material, grade, cross-section and insulation class as the original, from the OEM winding data sheet", note: "conductor grades and sizes are NOT interchangeable; substitution changes losses, impedance and short-circuit strength"}
+
+  oil_temperature_high:
+    title: Top-oil temperature high
+    inspection:
+      - Confirm with a reference thermometer in the oil pocket.
+      - Check load and ambient against the twin's projection.
+    corrective:
+      - Reduce load to the twin's safe-load figure until the oil cools.
+    qualification: [Operator under the distribution engineer.]
+    safety: *safety
+    materials: []
+
+  probe_offset:
+    title: Temperature instrument offset
+    inspection:
+      - Compare the oil probe with a reference thermometer in the pocket, and the ambient probe with a reference in the shade.
+    corrective:
+      - Recalibrate or replace the probe that disagrees with its reference.
+      - Do not dispatch a crew for a transformer fault.
+    qualification: [Instrumentation technician.]
+    safety:
+      - "The oil pocket is on the energised tank cover: work on it only under a permit with the unit isolated, or with an approved live-working procedure for the pocket."
+    materials:
+      - {item: Temperature probe, specification: "Same sensor type, range and connection as the installed probe (from the monitoring-device manual)", note: ""}
+
+  channel_fault:
+    title: Monitoring channel fault
+    inspection:
+      - Check the wiring and terminal of the named channel at the monitoring device; check the CT or VT secondary connection.
+    corrective:
+      - Re-terminate or replace the faulty lead or sensor.
+      - Do not dispatch a crew for a transformer fault.
+    qualification: [Instrumentation technician.]
+    safety:
+      - Never open-circuit a CT secondary under load; short it first with the approved shorting link.
+      - "VT secondary wiring is live: isolate it at its fuses before work."
+    materials:
+      - {item: CT or VT, specification: "Same ratio, burden and accuracy class as the installed unit", note: ""}
+
+  model_mismatch:
+    title: Thermal model mismatch
+    inspection:
+      - Check the nameplate rating entered for this unit; check the probe sits in a top-oil pocket.
+    corrective:
+      - Correct the nameplate in the twin (sidecar) if it is wrong.
+    qualification: [Engineer responsible for the monitoring configuration.]
+    safety: []
+    materials: []
+
+  core_test:
+    title: Core condition from the open-circuit test
+    inspection:
+      - Repeat the open-circuit test at rated voltage; compare with the factory test.
+    corrective:
+      - Refer to the OEM if no-load loss or current has risen.
+    qualification: [Test engineer; OEM for any core work.]
+    safety: *safety
+    materials: []

@@ -140,5 +140,56 @@ check("cooling: gradual onset ranks fouling / oil loss above a closed valve; fan
       cool["ranked"][0]["likelihood"] == "more likely" and cool["ranked"][-1]["likelihood"] == "excluded"
       and next(h for h in cool["ranked"] if "valve" in h["hypothesis"])["likelihood"] == "less likely")
 
+# ---- structured agents -------------------------------------------------------------------------
+from dtwin.agents import run_agents
+from dtwin.agents.schema import validate, DISCLAIMER
+from dtwin.twin.actions import catalogue
+
+moments = ["2026-04-02 10:00", "2026-04-10 12:00", "2026-04-14 17:00", "2026-04-17 12:00", "2026-04-23 15:00", "2026-04-28 03:00"]
+runs = {t: run_agents(tw, tw.locate(t)) for t in moments}
+errs = [(t, a, e) for t, r in runs.items() for a, recs in r["agents"].items() for rec in recs for e in validate(rec)]
+check("agents: every record fits the schema, at every moment", not errs,
+      f"{sum(len(v) for r in runs.values() for v in r['agents'].values())} records; {errs[:2]}")
+check("agents: deterministic (same input, same output)", run_agents(tw, tw.locate("2026-04-23 15:00")) == runs["2026-04-23 15:00"])
+check("agents: every record carries the advisory disclaimer (never operates equipment, never authorises service)",
+      all(rec["disclaimer"] == DISCLAIMER for r in runs.values() for recs in r["agents"].values() for rec in recs)
+      and "never operates equipment" in DISCLAIMER and "never authorises" in DISCLAIMER)
+
+untraced, numbers_missing = [], []
+for t, r in runs.items():
+    diag = {d["component_id"]: d for d in r["agents"]["diagnostic"]}
+    for rec in r["agents"]["recommendation"]:
+        d = diag[rec["component_id"]]
+        known = set(d["evidence_ids"])
+        ids = [i for c in rec["corrective"]["conditions"] for i in c["evidence_ids"]]
+        if not ids or not set(ids) <= known or not rec["recommended_action"]:
+            untraced.append((t, rec["component_id"]))
+    for d in r["agents"]["diagnostic"]:
+        if d["state"] in ("yellow", "red") and not any(ch.isdigit() for ch in d["explanation"]):
+            numbers_missing.append((t, d["component_id"]))
+check("every recommendation traces to evidence ids present in its diagnostic record", not untraced, str(untraced[:3]))
+check("explanations are templates filled with computed numbers", not numbers_missing, str(numbers_missing[:3]))
+rec_states = {rec["state"] for r in runs.values() for rec in r["agents"]["recommendation"]}
+diag_flag = {(t, d["component_id"]) for t, r in runs.items() for d in r["agents"]["diagnostic"] if d["state"] in ("yellow", "red", "sensor")}
+rec_flag = {(t, x["component_id"]) for t, r in runs.items() for x in r["agents"]["recommendation"]}
+check("recommendations exist exactly for yellow, red and instrument-fault components", diag_flag == rec_flag and rec_states <= {"yellow", "red", "sensor"},
+      f"{len(rec_flag)} recommendations")
+
+# ---- corrective actions ------------------------------------------------------------------------
+cat = catalogue()
+cat_items = {(m["item"], m["specification"]) for c in cat["conditions"].values() for m in c.get("materials", [])}
+shown = {(m["item"], m["specification"]) for r in runs.values() for rec in r["agents"]["recommendation"]
+         for c in rec["corrective"]["conditions"] for m in c["materials"]}
+check("materials come only from config/catalogue.yaml", shown <= cat_items, f"{len(shown)} distinct items shown")
+cool_rec = next(x for x in runs["2026-04-23 15:00"]["agents"]["recommendation"] if x["component_id"] == "radiators")
+leak = next(c for c in cool_rec["corrective"]["conditions"] if c["key"] == "oil_level_check")
+check("oil leak: indication distinguished from the confirmed source",
+      "INDICATION" in leak["indication_vs_source"] and "CONFIRMED" in leak["indication_vs_source"])
+wr = cat["conditions"]["winding_repair"]["materials"][0]
+check("winding work: conductor grades and sizes stated as not interchangeable", "NOT interchangeable" in wr["note"])
+check("every corrective condition lists inspection, corrective action, qualification and safety",
+      all(c["inspection"] and c["corrective"] and c["qualification"] is not None and "safety" in c
+          for r in runs.values() for rec in r["agents"]["recommendation"] for c in rec["corrective"]["conditions"]))
+
 print(f"\n  {sum(R)} of {len(R)} engineering checks passed")
 sys.exit(0 if all(R) else 1)

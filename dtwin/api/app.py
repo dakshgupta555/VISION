@@ -239,6 +239,19 @@ def losses_route(name: str, t: Optional[str] = None, kva: Optional[float] = None
     return losses(tw, tw.locate(_cursor(t)), pf=pf)
 
 
+@app.get("/api/{name}/agents")
+def agents_route(name: str, t: Optional[str] = None, kva: Optional[float] = None):
+    """Structured output of the observation, physics, diagnostic and
+    recommendation agents (deterministic; templates filled with numbers)."""
+    from ..agents import run_agents
+    tw = _twin(name, kva)
+    fresh = None
+    if name == "live":
+        from ..live.api import STORE
+        fresh = STORE.freshness()
+    return run_agents(tw, tw.locate(_cursor(t)), fresh)
+
+
 @app.get("/api/{name}/alerts")
 def alerts(name: str):
     from .engine import _alert_json

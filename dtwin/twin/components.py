@@ -335,6 +335,11 @@ def a_cooling(c, ev):
 def a_conservator(c, ev):
     if ev["thermal_status"] == "asset_cooling":
         return _rec("yellow", "Oil level is not measured, and the cooling alarm is active: low oil is one possible cause.",
+                    observed=[_obs("Rise-fit slope (cooling alarm)", ev["slope"], "", 3)],
+                    rule={"equation": "flag the conservator while the cooling alarm stands (low oil is a ranked cause)",
+                          "substituted": f"slope {ev['slope']:.3f} > 1.06" if ev["slope"] is not None else "cooling alarm active",
+                          "result": "check the oil level; this is an indication, not a confirmed leak"},
+                    deviation="an indication only: the oil level itself is not measured",
                     hypotheses=["Oil loss through a leak lowering the level (hypothesis)."],
                     verification=["Read the oil gauge.", "Look for oil stains at gaskets and the drain valve."],
                     missing=c.get("missing", []))
