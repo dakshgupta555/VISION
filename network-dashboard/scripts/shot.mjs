@@ -43,10 +43,27 @@ if (asset) {
   });
 }
 await page.waitForTimeout(Number(arg("wait", 2500)));
+if (process.argv.includes("--replay")) {
+  await page.getByRole("button", { name: "Replay", exact: true }).click();
+  await page.waitForTimeout(1500);
+}
 const hscroll = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 1);
+// same rule as the single-transformer app: no visible text under 14 px
+const small = await page.evaluate(() => {
+  const out = [];
+  for (const el of document.querySelectorAll("body *")) {
+    if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    const px = parseFloat(getComputedStyle(el).fontSize) * (el.ownerSVGElement ? (el.ownerSVGElement.getScreenCTM()?.a || 1) : 1);
+    if (px < 13.95) out.push(`${el.tagName.toLowerCase()} ${px.toFixed(1)}px "${el.textContent.trim().slice(0, 30)}"`);
+  }
+  return out;
+});
 mkdirSync(dirname(out), { recursive: true });
 await page.screenshot({ path: out, fullPage: full });
 console.log(`saved ${out}${hscroll ? "  WARNING: horizontal scroll" : ""}`);
+if (small.length) problems.push(`text under 14 px: ${small.slice(0, 5).join("; ")}`);
 if (problems.length) { console.log(problems.join("\n")); }
 await browser.close();
 process.exit(problems.length ? 1 : 0);

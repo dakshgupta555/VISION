@@ -239,15 +239,15 @@ export default function App() {
   const [hist, setHist] = useState(null);
   const [k, setK] = useState(null);
   const [budget, setBudget] = useState(400000);
-  const inflight = useRef(false);
+  const inflight = useRef(0);
 
   useEffect(() => { api("net/fleet").then(setFleet).catch((e) => setErr(String(e))); }, []);
+  // always fetch; a response that is older than the newest request is dropped
   const refresh = useCallback(() => {
-    if (inflight.current) return;
-    inflight.current = true;
+    const n = ++inflight.current;
     const q = mode === "replay" && k !== null ? `?at=${k}` : "";
-    api(`net/overview${q}`).then((x) => { setOv(x); setErr(null); }).catch((e) => setErr(String(e)))
-      .finally(() => { inflight.current = false; });
+    api(`net/overview${q}`).then((x) => { if (n === inflight.current) { setOv(x); setErr(null); } })
+      .catch((e) => { if (n === inflight.current) setErr(String(e)); });
   }, [mode, k]);
   useEffect(() => {
     refresh();
