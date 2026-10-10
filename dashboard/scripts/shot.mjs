@@ -14,6 +14,7 @@ const arg = (k, d) => { const i = process.argv.indexOf(`--${k}`); return i > 0 ?
 const url = arg("url", "http://localhost:5173");
 const t = arg("t", null);
 const scenario = arg("scenario", null);
+const mode = arg("mode", null);                 // "live" clicks the Live switch
 const out = arg("out", "../screens/dashboard.png");
 const clip = arg("clip", null);
 const width = Number(arg("width", 1440)), height = Number(arg("height", 900));
@@ -26,9 +27,13 @@ page.on("pageerror", (e) => problems.push(`pageerror: ${e.message}`));
 page.on("requestfailed", (r) => problems.push(`request failed: ${r.url()} ${r.failure()?.errorText}`));
 page.on("response", (r) => { if (r.status() >= 400) problems.push(`HTTP ${r.status()}: ${r.url()}`); });
 
-await page.goto(url, { waitUntil: "networkidle" });
+await page.goto(url, { waitUntil: mode === "live" ? "domcontentloaded" : "networkidle" });
 await page.waitForFunction(() => !document.body.innerText.includes("Loading twin"), null, { timeout: 30000 });
 
+if (mode === "live") {
+  await page.getByRole("button", { name: "Live", exact: true }).first().click();
+  await page.waitForTimeout(Number(arg("wait", 4000)));
+}
 if (scenario) {
   await page.selectOption("header select:last-of-type", scenario);
   await page.waitForTimeout(500);
@@ -42,7 +47,7 @@ if (t !== null) {
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }, String(t));
 }
-await page.waitForLoadState("networkidle");
+if (mode !== "live") await page.waitForLoadState("networkidle");   // an SSE stream never goes idle
 await page.waitForTimeout(800);                 // charts settle
 
 mkdirSync(dirname(out), { recursive: true });

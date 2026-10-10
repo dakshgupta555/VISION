@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
-  CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
+  CartesianGrid, Line, LineChart, ReferenceArea, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
 // Six zones: status header, live gauges, trends, health breakdown, alert feed,
@@ -12,6 +12,7 @@ import {
   AmbientTable, ChannelGrid, Cooling, Countdown, Gprs, Life, NameplateSelect, Notifications, SelfTest, untrusted,
   WhatIf,
 } from "./features.jsx";
+import { InjectPanel, LiveBar, ModeSwitch, useLive } from "./live.jsx";
 
 // ---------------------------------------------------------------- 1. header
 
@@ -24,9 +25,9 @@ function HeadStat({ label, value, unit = "", tone = "" }) {
   );
 }
 
-function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded }) {
-  const lvl = s.status.level;
-  const label = { ok: "NORMAL", warn: "ATTENTION", alarm: "ALARM" }[lvl];
+function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded, mode, setMode, stale }) {
+  const lvl = stale ? "info" : s.status.level;
+  const label = stale ? "NO RECENT DATA" : { ok: "NORMAL", warn: "ATTENTION", alarm: "ALARM" }[lvl];
   const active = s.alerts_live.length;
   const hb = Object.fromEntries(s.health.components.map((c) => [c.key, band(c.score)]));
   const tx = (b) => (b && b !== "ok" ? TEXT[b] : "");
@@ -43,6 +44,8 @@ function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded }) 
       <div className={`border rounded px-3 py-1 font-semibold tracking-wider ${LEVEL[lvl]}`}>{label}</div>
       <div className="num text-sm text-dim">{s.timestamp.replace("T", " ")}</div>
       <div className="ml-auto flex flex-wrap items-center gap-5">
+        <div className={`flex flex-wrap items-center gap-5 ${stale ? "grayscale opacity-40" : ""}`}
+          title={stale ? "last known values - no recent data" : undefined}>
         <HeadStat label="Health index" value={fmt(s.health.index, 0)} unit="/100" tone={tx(worse(band(s.health.index), lvl))} />
         <HeadStat label="Hot-spot" value={fmt(s.readings.hotspot_c)} unit="°C"
           tone={tx(hb.ageing)} />
@@ -52,15 +55,19 @@ function Header({ s, scenarios, scenario, setScenario, kva, setKva, recorded }) 
           tone={s.countdown.hotspot.already_above ? "text-alarm" : s.countdown.hotspot.minutes !== null ? "text-warn" : ""} />
         <HeadStat label="Active alerts" value={active}
           tone={active ? LEVEL[lvl].split(" ")[0] : "text-ok"} />
+        </div>
         <a className="border border-accent text-accent rounded px-2 py-1 text-xs"
-          href={`/api/${scenario}/report.pdf?t=${s.i}${kva ? `&kva=${kva}` : ""}`} download>
+          href={mode === "live" ? "/api/live/report.pdf" : `/api/${scenario}/report.pdf?t=${s.i}${kva ? `&kva=${kva}` : ""}`} download>
           Download report (PDF)
         </a>
-        <NameplateSelect kva={kva} setKva={setKva} rated={recorded} />
-        <select className="bg-ink border border-edge rounded px-2 py-1 text-sm" value={scenario}
-          onChange={(e) => setScenario(e.target.value)}>
-          {scenarios.map((n) => <option key={n}>{n}</option>)}
-        </select>
+        <ModeSwitch mode={mode} setMode={setMode} />
+        {mode === "replay" && <NameplateSelect kva={kva} setKva={setKva} rated={recorded} />}
+        {mode === "replay" && (
+          <select className="bg-ink border border-edge rounded px-2 py-1 text-sm" value={scenario}
+            onChange={(e) => setScenario(e.target.value)}>
+            {scenarios.map((n) => <option key={n}>{n}</option>)}
+          </select>
+        )}
       </div>
     </header>
   );
@@ -132,8 +139,11 @@ function Gauges({ s }) {
 }
 
 // ---------------------------------------------------------------- 3. trends
-function Trends({ series }) {
+function Trends({ series, prewarmUntil }) {
   if (!series) return <Panel title="Trends">loading…</Panel>;
+  // live: the last data point inside the prewarm history, as an x-axis category
+  const preIdx = prewarmUntil ? series.t.filter((t) => t <= prewarmUntil).length - 1 : -1;
+  const pre = preIdx >= 0 ? hhmm(series.t[preIdx]) : null;
   const data = series.t.map((t, k) => ({
     t: hhmm(t), oil: series.oil_c[k], twin: series.pred_oil_c[k], hs: series.hotspot_c[k],
     amb: series.ambient_c[k], res: series.residual_k[k], load: series.K_oil[k] && 100 * series.K_oil[k],
@@ -146,6 +156,8 @@ function Trends({ series }) {
           <XAxis dataKey="t" tick={axis} minTickGap={40} />
           <YAxis tick={axis} domain={["auto", "auto"]} />
           <Tooltip {...tip} />
+          {pre && <ReferenceArea x1={data[0].t} x2={pre} fill="#7d8a9a" fillOpacity={0.12}
+            label={{ value: "prewarm history", fill: "#7d8a9a", fontSize: 10, position: "insideTopLeft" }} />}
           <ReferenceLine y={series.trip_c} stroke="#7d8a9a" strokeDasharray="4 4"
             label={{ value: `fixed trip ${series.trip_c} °C`, fill: "#7d8a9a", fontSize: 10, position: "insideTopLeft" }} />
           <Line dataKey="oil" name="oil measured" stroke="#22d3ee" dot={false} strokeWidth={1.6} isAnimationActive={false} />
@@ -310,6 +322,8 @@ export default function App() {
   const [recorded, setRecorded] = useState(null);
   const inflight = useRef(false);
   const q = kva ? `&kva=${kva}` : "";
+  const [mode, setMode] = useState("replay");     // replay is the default and the demo fallback
+  const live = useLive(mode === "live");
 
   useEffect(() => { api("scenarios").then((d) => setScenarios(d.scenarios)).catch((e) => setErr(String(e))); }, []);
 
@@ -337,42 +351,76 @@ export default function App() {
     return () => clearInterval(id);
   }, [playing, speed, s]);
 
+  if (mode === "live" && !live.s) {
+    return (
+      <div className="min-h-screen">
+        <div className="px-4 py-3 border-b border-edge flex items-center gap-4">
+          <div className="text-lg font-semibold">Live</div>
+          <div className="ml-auto"><ModeSwitch mode={mode} setMode={setMode} /></div>
+        </div>
+        <LiveBar status={live.status} />
+        <div className="p-6 text-dim text-sm">
+          {live.status?.has_data === false
+            ? <>No live data yet. Start the stream in a terminal: <span className="num text-fg">python -m dtwin.live --speed 600</span></>
+            : live.err || "Waiting for the live stream…"}
+        </div>
+      </div>
+    );
+  }
   if (err && !s) return <div className="p-6 text-alarm num">Backend unreachable: {err}. Start it with: uvicorn dtwin.api.app:app --port 8000</div>;
   if (!s) return <div className="p-6 text-dim">Loading twin…</div>;
+  return <Board s={mode === "live" ? live.s : s} series={mode === "live" ? live.series : series}
+    scen={mode === "live" ? "live" : scenario} mode={mode} setMode={setMode} live={live}
+    scenarios={scenarios} scenario={scenario} setScenario={setScenario} kva={kva} setKva={setKva}
+    recorded={recorded} tl={tl} i={i} setI={setI} playing={playing} setPlaying={setPlaying}
+    speed={speed} setSpeed={setSpeed} />;
+}
 
+function Board({ s, series, scen, mode, setMode, live, scenarios, scenario, setScenario, kva, setKva, recorded,
+  tl, i, setI, playing, setPlaying, speed, setSpeed }) {
+  const stale = mode === "live" && Boolean(live.status?.stale);
   return (
     <div className="min-h-screen">
       <Header s={s} scenarios={scenarios} scenario={scenario} setScenario={setScenario}
-        kva={kva} setKva={setKva} recorded={recorded ?? s.nameplate.rating_kva} />
+        kva={kva} setKva={setKva} recorded={recorded ?? s.nameplate.rating_kva} mode={mode} setMode={setMode}
+        stale={stale} />
       {s.data_source.warnings.length > 0 && (
         <div className="px-4 py-1.5 border-b border-warn bg-warn/10 text-xs text-warn">
           <b>Data source:</b> {s.data_source.warnings.join(" · ")}
           <span className="text-dim"> — see the mapping report: python -m dtwin.ingest data/{scenario}.csv</span>
         </div>
       )}
-      <Replay tl={tl} i={i ?? 0} n={s.n} setI={setI} playing={playing} setPlaying={setPlaying}
-        speed={speed} setSpeed={setSpeed} />
-      <main className="p-3 grid gap-3 lg:grid-cols-3">
+      {mode === "live" ? <LiveBar status={live.status} /> : (
+        <Replay tl={tl} i={i ?? 0} n={s.n} setI={setI} playing={playing} setPlaying={setPlaying}
+          speed={speed} setSpeed={setSpeed} />
+      )}
+      {stale && (
+        <div className="px-4 py-1.5 border-b border-edge bg-edge/40 text-xs text-dim">
+          Everything below is the last known state and is greyed out: {live.status.reason}.
+        </div>
+      )}
+      <main className={`p-3 grid gap-3 lg:grid-cols-3 ${stale ? "grayscale opacity-50" : ""}`}>
         <div className="lg:col-span-2 space-y-3">
           <Countdown s={s} />
           <Gauges s={s} />
-          <Trends series={series} />
+          <Trends series={series} prewarmUntil={mode === "live" ? live.status?.prewarm_until : null} />
           <Cooling s={s} series={series} />
         </div>
         <div className="space-y-3">
+          {mode === "live" && <InjectPanel />}
           <Recommendations s={s} />
           <Health h={s.health} lvl={s.status.level} />
           <Life s={s} />
         </div>
         <div className="lg:col-span-2 space-y-3">
           <Alerts groups={s.alert_groups} />
-          <Notifications scenario={scenario} kva={kva} i={s.i} />
+          {mode === "replay" && <Notifications scenario={scenario} kva={kva} i={s.i} />}
         </div>
         <div>
           <Comparison s={s} />
         </div>
         <div className="lg:col-span-3">
-          <WhatIf scenario={scenario} kva={kva} i={s.i} s={s} />
+          <WhatIf scenario={scen} kva={mode === "live" ? null : kva} i={s.i} s={s} />
         </div>
         <div className="lg:col-span-2"><Gprs s={s} /></div>
         <div><SelfTest kva={kva ?? s.nameplate.rating_kva} /></div>

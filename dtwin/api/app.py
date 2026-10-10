@@ -42,6 +42,11 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 
 def _twin(name, kva=None):
+    if name == "live":                                  # the live buffer, not a file
+        from ..live.api import STORE
+        if STORE.twin is None:
+            raise HTTPException(503, "no live data yet: start  python -m dtwin.live --speed 600")
+        return STORE.twin
     if name not in scenarios():
         raise HTTPException(404, f"unknown scenario {name!r}")
     return get_twin(name, kva)
@@ -60,6 +65,9 @@ def list_scenarios():
 
 @app.get("/api/{name}/state")
 def state(name: str, t: Optional[str] = None, kva: Optional[float] = None):
+    if name == "live":
+        from ..live.api import live_state
+        return live_state(_twin(name), _cursor(t))
     return _twin(name, kva).state(_cursor(t))
 
 
@@ -122,6 +130,10 @@ def _dispatcher(name, kva):
 
 @app.get("/api/{name}/notifications")
 def notifications(name: str, t: Optional[str] = None, kva: Optional[float] = None, limit: int = 40):
+    if name == "live":
+        return {"mode": "live-simulated", "entries": [], "total_planned": 0, "episodes": 0,
+                "outbox": "", "smtp_configured": False, "sms_configured": False,
+                "guard": "notifications are not generated from the live simulator stream"}
     tw = _twin(name, kva)
     d = _dispatcher(name, kva)
     upto = tw.rows.index[tw.locate(_cursor(t))]
@@ -167,3 +179,7 @@ def demo_send(name: str, msg_id: str, kva: Optional[float] = None):
 def alerts(name: str):
     from .engine import _alert_json
     return {"alerts": [_alert_json(a) for a in _twin(name).alerts]}
+
+
+from ..live.api import router as _live_router   # noqa: E402  (after the generic routes on purpose)
+app.include_router(_live_router)
