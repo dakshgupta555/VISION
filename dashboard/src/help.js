@@ -115,4 +115,18 @@ export const HELP = {
     "The same analysis as structured records (observation, physics, diagnostic, recommendation) in one schema, for export or audit.",
     "Each record lists observations, calculations, deviations, hypotheses, evidence coverage and the action.",
   ],
+  calibration: [
+    "Every transformer leaves the factory with a test report: its no-load loss, its load loss, its impedance and, often, how hot it ran in a heat-run test. Enter those numbers here and the twin uses this transformer's own losses instead of typical values.",
+    "Each number shows where it came from: NAMEPLATE, TEST REPORT, DERIVED (calculated from the report, formula shown) or ASSUMED (not in the report, so the built-in value is kept).",
+    "Nothing changes until you press Apply, and Reset to defaults brings back exactly the built-in twin.",
+  ],
+  calibrationParams: [
+    "The parameters the twin now uses. \"Was\" is the built-in value; \"change\" is the difference.",
+    "The top-oil rise is DERIVED: the twin keeps its design cooling and the report's losses change the heat put in, using the IEEE C57.91 loss scaling. It is not tuned to match the heat-run result; that comparison is a check.",
+  ],
+  calibrationChecks: [
+    "Checks compare the report with the model. They are information, not pass/fail guarantees.",
+    "Top-oil rise: a large difference between the heat run and the model says this unit cools better or worse than the design the twin assumes.",
+    "Losses against the IS 1180 limit appear only when config/standards.yaml holds a verified limit with its source; otherwise the row reads \"not checked\".",
+  ],
 };

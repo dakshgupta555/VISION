@@ -10,6 +10,7 @@ import Overview, { TimeBar, TopBar } from "./overview/Overview.jsx";
 import SimulateWorkspace from "./twin/Simulate.jsx";
 import EngineeringPage from "./eng/EngineeringPage.jsx";
 import Measurements from "./eng/Measurements.jsx";
+import Calibration from "./eng/Calibration.jsx";
 import { useFem } from "./twin/TwinPage.jsx";
 import HeatMapView from "./twin/HeatMap.jsx";
 import { HELP } from "./help.js";
@@ -38,13 +39,21 @@ export default function App() {
   const [mode, setMode] = useState("replay");     // replay is the default and the demo fallback
   const [view, setView] = useState("overview");
   const live = useLive(mode === "live");
+  const [cal, setCal] = useState(null);           // the applied test report, if any
+  const [calV, setCalV] = useState(0);            // bumps after Apply / Reset so the twin is fetched again
+  const onCalibration = useCallback(() => setCalV((v) => v + 1), []);
 
   useEffect(() => { api("scenarios").then((d) => setScenarios(d.scenarios)).catch((e) => setErr(String(e))); }, []);
+  useEffect(() => { api("calibration").then(setCal).catch(() => setCal(null)); }, [calV]);
 
+  const calSeen = useRef(calV);
   useEffect(() => {
-    setS(null); setSeries(null); setTl(null); setPlaying(false);
+    // a new report refreshes the twin in place; a new file or rating starts from scratch
+    const calOnly = calSeen.current !== calV;
+    calSeen.current = calV;
+    if (!calOnly) { setS(null); setSeries(null); setTl(null); setPlaying(false); }
     api(`${scenario}/timeline?${q}`).then((d) => { setTl(d); setI((x) => x ?? 0); }).catch((e) => setErr(String(e)));
-  }, [scenario, q]);
+  }, [scenario, q, calV]);
   useEffect(() => { setKva(null); setRecorded(null); setI(null); }, [scenario]);
   useEffect(() => { if (s && !kva) setRecorded(s.nameplate.rating_kva); }, [s, kva]);
 
@@ -55,7 +64,7 @@ export default function App() {
       .then(([st, se]) => { setS(st); setSeries(se); setErr(null); })
       .catch((e) => setErr(String(e)))
       .finally(() => { inflight.current = false; });
-  }, [scenario, q]);
+  }, [scenario, q, calV]);
 
   useEffect(() => { if (i !== null) load(i); }, [i, load]);
 
@@ -87,6 +96,7 @@ export default function App() {
     s: cur, mode, setMode, live, stale: mode === "live" && Boolean(live.status?.stale), theme, setTheme,
     scenario, scenarios, setScenario, kva, setKva, recorded: recorded ?? s.nameplate.rating_kva,
     tl, i, setI, playing, setPlaying, speed, setSpeed, scenKey: mode === "live" ? "live" : scenario,
+    cal, onCalibration,
   };
   return <Board ctx={ctx} series={mode === "live" ? live.series : series} view={view} setView={setView} />;
 }
@@ -104,6 +114,12 @@ function Board({ ctx, series, view, setView }) {
         <div className="px-6 py-2 bg-panel border-b border-warn text-sm text-warn">
           <b>Data source: </b>{s.data_source.warnings.join("; ")}.
           <span className="text-dim"> See the mapping report: python -m dtwin.ingest data/{ctx.scenario}.csv</span>
+        </div>
+      )}
+      {ctx.cal?.active && (
+        <div className="px-6 py-2 bg-panel border-b border-fg text-[15px] flex flex-wrap items-center gap-x-3">
+          <b>Calibrated from test report: {ctx.cal.result.name}</b>
+          <span className="text-sm text-dim">Losses, impedance and thermal parameters come from this report; see Engineering, Calibration.</span>
         </div>
       )}
       <TimeBar ctx={ctx} />
@@ -129,6 +145,7 @@ function Board({ ctx, series, view, setView }) {
           { key: "measure", label: "Measurements and alarms", first: true,
             render: () => <Measurements s={s} series={series} scen={scenKey} kva={kva} mode={mode} /> },
           { key: "fem", label: "Heat map (FEM)", render: () => <FemTab scen={scenKey} cursor={s.i} version={s.timestamp} /> },
+          { key: "calibration", label: "Calibration", render: () => <Calibration scen={scenKey} onChange={ctx.onCalibration} /> },
         ]} />
     );
   }
