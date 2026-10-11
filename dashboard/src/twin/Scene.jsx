@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { CylinderGeometry, Float32BufferAttribute } from "three";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { CylinderGeometry, Float32BufferAttribute, Object3D } from "three";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { CameraControls, Html, Outlines } from "@react-three/drei";
 import { hotspotColor, reducedMotion, SELECT, STATE, VIOLET } from "./states.js";
@@ -67,6 +67,57 @@ function Winding({ p, radius, height, x, profile, scale }) {
   return <Part {...p} vertexColors position={[x, 0.55, 0]} geometry={<primitive object={geo} attach="geometry" />} />;
 }
 
+
+// Silica-gel breather: a clear chamber of gel beads on a pipe from the
+// conservator end, with an oil-seal cup below and a cap above. The bead colour
+// is the configured illustrative indicator convention (config/breather.yaml),
+// never a measurement. Bead positions are fixed, so the picture is the same
+// every time for the same condition.
+const BEAD_N = 40;
+function beadPoints() {
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  return Array.from({ length: BEAD_N }, () => {
+    const a = rnd() * 2 * Math.PI, r = 0.034 * Math.sqrt(rnd());
+    return [r * Math.cos(a), (rnd() - 0.5) * 0.14, r * Math.sin(a)];
+  });
+}
+const BEADS = beadPoints();
+
+function Breather({ p, colour }) {
+  const beads = useRef();
+  const c = colour || "#a3aaa6";
+  useLayoutEffect(() => {
+    const o = new Object3D();
+    BEADS.forEach(([x, y, z], k) => { o.position.set(x, y, z); o.updateMatrix(); beads.current.setMatrixAt(k, o.matrix); });
+    beads.current.instanceMatrix.needsUpdate = true;
+  }, []);
+  const at = [0.48, 1.18, -0.22];
+  return (
+    <group>
+      {/* breathing pipe from the conservator end, then down to the cap */}
+      <Part {...p} color={METAL} position={[0.445, 1.38, -0.22]} rotation={[0, 0, Math.PI / 2]}
+        geometry={<cylinderGeometry args={[0.008, 0.008, 0.07, 10]} />} />
+      <Part {...p} color={METAL} position={[0.48, 1.325, -0.22]}
+        geometry={<cylinderGeometry args={[0.008, 0.008, 0.11, 10]} />} />
+      <Part {...p} color={METAL} position={[0.48, 1.275, -0.22]}
+        geometry={<cylinderGeometry args={[0.056, 0.056, 0.02, 20]} />} />
+      {/* transparent chamber; the highlight outline is drawn on this part */}
+      <Part {...p} color={c} opacity={0.3} position={at}
+        geometry={<cylinderGeometry args={[0.05, 0.05, 0.17, 24, 1, true]} />} />
+      <group position={at}>
+        <instancedMesh ref={beads} args={[null, null, BEAD_N]}>
+          <sphereGeometry args={[0.011, 10, 8]} />
+          <meshStandardMaterial color={c} roughness={0.35} metalness={0.05} emissive={c} emissiveIntensity={0.15} />
+        </instancedMesh>
+      </group>
+      {/* oil-seal cup */}
+      <Part {...p} color={METAL} position={[0.48, 1.1, -0.22]}
+        geometry={<cylinderGeometry args={[0.058, 0.04, 0.03, 20]} />} />
+    </group>
+  );
+}
+
 function Comp({ id, comps, sel, setSel, hover, setHover, children }) {
   const comp = comps[id];
   return (
@@ -84,7 +135,7 @@ function Comp({ id, comps, sel, setSel, hover, setHover, children }) {
   );
 }
 
-function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem }) {
+function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem, silica }) {
   const prof = (ph, w) => fem?.phases?.[ph.toUpperCase()]?.blocks?.[w]?.axial_max_c || null;
   const P = { comps, sel, setSel, hover, setHover };
   const shell = xray ? 0.12 : 1;
@@ -155,9 +206,7 @@ function Transformer({ comps, scale, sel, setSel, hover, setHover, xray, fem }) 
           <Part {...p} position={[0, 1.18, -0.22]} geometry={<cylinderGeometry args={[0.02, 0.02, 0.2, 10]} />} />
         </group>
       )}</Comp>
-      <Comp id="breather" {...P}>{(p) => (
-        <Part {...p} position={[0.48, 1.18, -0.22]} geometry={<cylinderGeometry args={[0.04, 0.04, 0.18, 16]} />} />
-      )}</Comp>
+      <Comp id="breather" {...P}>{(p) => <Breather p={p} colour={silica?.colour} />}</Comp>
 
       {/* bushings: 3 HV, 4 LV (R, Y, B, N) */}
       {["r", "y", "b"].map((ph) => {
@@ -270,7 +319,7 @@ function Callout({ callout }) {
 // CSS variable: the page's theme attribute changes after this renders.
 const SCENE_BG = { light: "#e8ebef", dark: "#11161d" };
 
-export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey, onTriangles, fem, callout, theme }) {
+export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey, onTriangles, fem, callout, theme, silica }) {
   const bg = SCENE_BG[theme] || SCENE_BG.light;
   const [hover, setHover] = useState(null);
   const controls = useRef();
@@ -282,7 +331,7 @@ export default function Scene({ comps, scale, sel, setSel, xray, flyTo, resetKey
       <hemisphereLight args={["#dfe7ef", "#1b222b", 0.8]} />
       <directionalLight position={[3, 4, 2]} intensity={1.4} castShadow />
       <directionalLight position={[-3, 2, -2]} intensity={0.4} />
-      <Transformer comps={comps} scale={scale} sel={sel} setSel={setSel} hover={hover} setHover={setHover} xray={xray} fem={fem} />
+      <Transformer comps={comps} scale={scale} sel={sel} setSel={setSel} hover={hover} setHover={setHover} xray={xray} fem={fem} silica={silica} />
       <Callout callout={callout} />
       <CameraControls ref={controls} minDistance={1.2} maxDistance={8} smoothTime={0.6} draggingSmoothTime={0.12}
         maxPolarAngle={Math.PI * 0.49} />

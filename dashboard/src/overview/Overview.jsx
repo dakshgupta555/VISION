@@ -15,6 +15,7 @@ import { webglAvailable } from "../twin/states.js";
 import Schematic from "../twin/Schematic.jsx";
 import HeatMapView from "../twin/HeatMap.jsx";
 import { Explainable } from "./Explain.jsx";
+import { BreatherInfoBody, SilicaCard, SilicaLegend, useSilica } from "../twin/silica.jsx";
 
 const Scene = lazy(() => import("../twin/Scene.jsx"));
 const TONE_TEXT = { ok: "text-ok", warn: "text-warn", alarm: "text-alarm", sensor: "text-sensor", info: "text-dim" };
@@ -218,7 +219,11 @@ function TwinPanel({ ctx, onSimulate }) {
   const gl = useMemo(() => webglAvailable(), []);
   const nf = data?.newest_fault;
   const fly = nf && FOCUS[nf.component] ? [...FOCUS[nf.component]] : null;
+  const silica = useSilica();
   const comps = data ? Object.fromEntries(data.components.map((c) => [c.id, c])) : {};
+  if (comps.breather && silica.rec) {          // wording only: the state stays "not assessed" (grey)
+    comps.breather = { ...comps.breather, reason: `${silica.rec.label}. ${silica.rec.source.kind === "ASSUMED" ? "User-set scenario, not a measurement." : ""}` };
+  }
   const fc = nf ? comps[nf.component] : null;
   const callout = nf && fc ? {
     id: nf.component, text: nf.family === "sensor" ? `${fc.name}: instrument fault` : `${fc.name}: ${nf.what}`,
@@ -241,14 +246,19 @@ function TwinPanel({ ctx, onSimulate }) {
           <div className="absolute inset-0">
             <Suspense fallback={<div className="p-6 text-dim">Loading 3D…</div>}>
               <Scene comps={comps} scale={data.scale} sel={sel} setSel={setSel} xray={xray} flyTo={fly}
-                resetKey={resetKey} fem={fem} callout={callout} theme={theme} />
+                resetKey={resetKey} fem={fem} callout={callout} theme={theme} silica={silica} />
             </Suspense>
           </div>
         ) : <Schematic comps={comps} scale={data.scale} sel={sel} setSel={setSel} />}
         {!heat && sel && comps[sel] && (
           <div className="absolute top-16 right-4 bottom-4 w-[24rem] card overflow-y-auto z-20">
             <div className="flex justify-end p-2"><button className="twin-btn" onClick={() => setSel(null)}>Close</button></div>
-            <Inspector c={comps[sel]} rec={recs[sel]} />
+            {sel === "breather" ? (
+              <div className="p-4 pt-0">
+                <h3 className="text-base font-semibold mb-2">Silica-Gel Breather</h3>
+                <BreatherInfoBody rec={silica.rec} />
+              </div>
+            ) : <Inspector c={comps[sel]} rec={recs[sel]} />}
           </div>
         )}
         {!heat && data && (
@@ -257,6 +267,9 @@ function TwinPanel({ ctx, onSimulate }) {
               ["var(--color-sensor)", "Instrument fault"], ["#a3aaa6", "Not monitored"]].map(([c, l]) => (
               <span key={l} className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full" style={{ background: c }} />{l}</span>
             ))}
+            <span className="flex flex-wrap items-center gap-x-3" title={silica.rec?.convention}>
+              Breather gel (illustrative convention): <SilicaLegend rec={silica.rec} compact />
+            </span>
             <span>Click a part for details</span>
           </div>
         )}
@@ -559,6 +572,7 @@ export default function Overview({ ctx, series, onSimulate }) {
         <div className="space-y-6">
           <Whats s={s} stale={stale} />
           <KeyNumbers s={s} ctx={ctx} />
+          <SilicaCard />
         </div>
       </div>
       <Trends series={series} limits={s.display_limits} prewarmUntil={mode === "live" ? live.status?.prewarm_until : null} />

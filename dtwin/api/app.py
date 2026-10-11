@@ -163,6 +163,17 @@ def calibration_reset():
     return {"active": False}
 
 
+@app.get("/api/breather")
+def breather(condition: Optional[str] = None):
+    """Silica-gel breather record for a user-set condition (default unknown).
+    Read-only; nothing in the engine reads it."""
+    from ..twin.breather import describe
+    try:
+        return describe(condition)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+
 @app.get("/api/scenarios")
 def list_scenarios():
     return {"scenarios": scenarios(), "default": "showcase"}

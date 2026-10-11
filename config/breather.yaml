@@ -1,0 +1,45 @@
+# Silica-gel breather: display convention and wording.
+#
+# There is NO sensor for the breather in this system: no humidity, no moisture
+# in oil, no gel colour reading. The condition is a user-set scenario or an
+# inspection entry (default "unknown"). Everything below is presentation and
+# qualitative; nothing here is a measurement and none of it feeds the hot-spot,
+# the top-oil temperature or the health index.
+#
+# The colours are an ILLUSTRATIVE INDICATOR CONVENTION. Real self-indicating
+# gels differ: cobalt-chloride gel goes blue to pink, many cobalt-free gels go
+# orange to dark green or colourless. Edit the colours to match the gel
+# actually fitted; the meaning of each state does not change.
+
+convention: >-
+  Illustrative indicator convention (blue = dry, pink-purple = part-exhausted,
+  orange-brown = saturated, grey = unknown). A display choice, not a laboratory
+  measurement. Real gel colours depend on the formulation fitted.
+
+default: unknown
+
+states:
+  effective:
+    label: Effective
+    colour: "#2f6fdc"
+    effectiveness: Full
+    ingress_risk: Low
+    meaning: Gel is dry enough to remove moisture from the air drawn into the conservator.
+  partial:
+    label: Partially exhausted
+    colour: "#b45ccf"
+    effectiveness: Reduced
+    ingress_risk: Elevated
+    meaning: Part of the gel has taken up moisture; some of the air passes with less drying.
+  saturated:
+    label: Saturated, needs inspection
+    colour: "#b8641c"
+    effectiveness: Ineffective
+    ingress_risk: High
+    meaning: Gel can no longer adsorb moisture; breathing air reaches the conservator undried.
+  unknown:
+    label: Unknown (no data)
+    colour: "#a3aaa6"
+    effectiveness: Not assessed
+    ingress_risk: Not assessed
+    meaning: No inspection entry or scenario has been set. This is the default and it is not a fault.
