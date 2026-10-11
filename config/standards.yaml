@@ -1,0 +1,27 @@
+# Loss limits for Indian distribution transformers, IS 1180 (Part 1).
+#
+# NOT FILLED: enter values from your copy of IS 1180 (Part 1), with the
+# edition, amendment, energy-efficiency level and table for each row.
+#
+# Why empty: these limits may only be entered from a source read directly. In
+# the session that created this file (2026-10-11) the standard's text was not
+# available: a web search found references to IS 1180 (Part 1):2014 Energy
+# Efficiency Level-2 and Amendment 4 (BIS guideline, services.bis.gov.in) but
+# not the table, and a utility tender specification (WBSEDCL, 25-160 kVA) could
+# not be read without a PDF renderer. No number was taken from memory.
+#
+# While a cell is empty the dashboard's compliance row reads "not checked".
+# Columns: maximum total losses in watts at 50 % and at 100 % load.
+source: null            # e.g. "IS 1180 (Part 1):2014, Amendment 4, Table 3, Energy Efficiency Level 2"
+loss_limits:
+  - {rating_kva: 16,  max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 25,  max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 63,  max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 100, max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 160, max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 200, max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 250, max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 315, max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 400, max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 500, max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}
+  - {rating_kva: 630, max_total_loss_50pct_w: null, max_total_loss_100pct_w: null, source: null}

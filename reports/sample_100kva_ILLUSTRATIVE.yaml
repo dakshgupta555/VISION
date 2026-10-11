@@ -1,0 +1,31 @@
+# SAMPLE TEST REPORT - ILLUSTRATIVE ONLY. Not a real test certificate, not from
+# any manufacturer, not CPRI data. Plausible synthetic values for the 100 kVA,
+# 11 kV / 433 V ONAN design the twin is built around, to show calibration.
+#   python -m dtwin.calibrate reports/sample_100kva_ILLUSTRATIVE.yaml --show
+report:
+  name: "SAMPLE 100 kVA test report (illustrative, not a real certificate)"
+  illustrative: true
+  note: "Synthetic values for demonstration. Replace with the numbers from the unit's own factory test report."
+nameplate:
+  rating_kva: 100
+  hv_kv: 11
+  lv_v: 433
+  vector_group: Dyn11
+  cooling: ONAN
+  frequency_hz: 50
+  impedance_pct: 4.5
+open_circuit:            # no-load test at rated voltage, LV side energised
+  p0_w: 245
+  voltage_v: 433
+  i0_a: 2.1              # line current on the LV side
+  i0_side: lv
+short_circuit:           # load-loss test at rated current
+  pk_w: 1240
+  reference_temp_c: 30   # measured near ambient; the twin moves it to its 75 C reference
+  i2r_w: 1100            # I2R part, from winding resistances at the same temperature
+  winding_material: copper
+  impedance_pct: 4.62
+heat_run:                # temperature-rise test at total losses
+  top_oil_rise_k: 48.5
+  average_winding_rise_k: 54.0
+  hotspot_rise_k: 71.0   # over ambient

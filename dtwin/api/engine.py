@@ -111,13 +111,19 @@ class Twin:
 
     # ------------------------------------------------------------------ build
     @classmethod
-    def from_csv(cls, name: str, rating_kva: float = None):
+    def from_csv(cls, name: str, rating_kva: float = None, calibration=None):
         """Any CSV, through the defensive ingestion layer. The rating comes from
         the request, else the file's sidecar or preamble, else an assumption
-        that the report flags."""
+        that the report flags. A calibration (dtwin/calibrate, from a factory
+        test report) replaces the preset nameplate; without one nothing changes."""
         df, rep = ingest.load(DATA / f"{name}.csv", rating_kva=rating_kva)
         extra = {k: rep.nameplate[k] for k in ("hv_kv", "lv_v") if rep.nameplate.get(k)}
-        np_ = preset(rep.nameplate["rating_kva"], **extra)
+        if calibration is not None:
+            calibration.check_voltages(rep.nameplate.get("lv_v") or 433.0, rep.nameplate.get("hv_kv") or 11.0,
+                                       where=f"data file {name} assumes")
+            np_ = calibration.nameplate()
+        else:
+            np_ = preset(rep.nameplate["rating_kva"], **extra)
         if rep.nameplate.get("tag"):
             np_.tag = rep.nameplate["tag"]
         rows, fits, meta = validate(df, np_, absent=rep.absent)
@@ -704,9 +710,26 @@ def _alert_json(a):
     return {**a, "start": a["start"].isoformat(), "end": a["end"].isoformat()}
 
 
+def get_twin(name: str, rating_kva: float = None, calibration=None) -> Twin:
+    """calibration: a dtwin.calibrate.Calibration, or None for the built-in
+    nameplate. Twins are cached per (file, rating, report)."""
+    if calibration is None:
+        return _get_twin(name, rating_kva)
+    _CAL[calibration.key] = calibration
+    return _get_twin_cal(name, calibration.key)
+
+
 @lru_cache(maxsize=32)
-def get_twin(name: str, rating_kva: float = None) -> Twin:
+def _get_twin(name: str, rating_kva: float = None) -> Twin:
     return Twin.from_csv(name, rating_kva)
+
+
+_CAL = {}
+
+
+@lru_cache(maxsize=16)
+def _get_twin_cal(name: str, key: str) -> Twin:
+    return Twin.from_csv(name, calibration=_CAL[key])
 
 
 def scenarios():

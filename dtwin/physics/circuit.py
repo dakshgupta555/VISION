@@ -116,26 +116,44 @@ def physical_turns_ratio(np_: Nameplate, connection="Dyn11"):
     return hv_w / lv_w
 
 
-def from_nameplate(np_: Nameplate, z_pct=4.5, p_cu_w=None, p_core_w=None, i0_pct=2.0):
+DEFAULT_Z_PCT, DEFAULT_I0_PCT = 4.5, 2.0
+
+
+def from_nameplate(np_: Nameplate, z_pct=None, p_cu_w=None, p_core_w=None, i0_pct=None):
     """Build the circuit from ratings plus percentage impedance, losses and
     no-load current. Rated core loss defaults to copper loss / R, keeping the
     thermal model's loss ratio. R and X are split equally between the windings
-    when referred to one side (the usual assumption without separate tests)."""
+    when referred to one side (the usual assumption without separate tests).
+
+    A nameplate calibrated from a test report (np_.test_data, see
+    dtwin/calibrate) supplies any of the four that the caller does not."""
+    td = getattr(np_, "test_data", None) or {}
     v1, v2, i1, i2, s_ph = phase_quantities(np_)
     ph = np_.phases
     src = {}
+    for k in ("z_pct", "p_cu_w", "p_core_w", "i0_pct"):
+        if locals()[k] is None and td.get(k) is not None:
+            src[k] = td.get("source", {}).get(k, "test report")
+    z_pct = td.get("z_pct") if z_pct is None and td.get("z_pct") is not None else z_pct
+    p_cu_w = td.get("p_cu_w") if p_cu_w is None and td.get("p_cu_w") is not None else p_cu_w
+    p_core_w = td.get("p_core_w") if p_core_w is None and td.get("p_core_w") is not None else p_core_w
+    i0_pct = td.get("i0_pct") if i0_pct is None and td.get("i0_pct") is not None else i0_pct
     if p_cu_w is None:
         p_cu_w = 0.013 * np_.rating_kva * 1000.0              # 1.3 % of rating
         src["p_cu_w"] = ILLUSTRATIVE
     else:
-        src["p_cu_w"] = "given"
+        src.setdefault("p_cu_w", "given")
     if p_core_w is None:
         p_core_w = p_cu_w / np_.loss_ratio_R
         src["p_core_w"] = "copper loss / nameplate R"
     else:
-        src["p_core_w"] = "given"
-    src["z_pct"] = ILLUSTRATIVE if z_pct == 4.5 else "given"
-    src["i0_pct"] = ILLUSTRATIVE if i0_pct == 2.0 else "given"
+        src.setdefault("p_core_w", "given")
+    if z_pct is None:
+        z_pct = DEFAULT_Z_PCT
+    if i0_pct is None:
+        i0_pct = DEFAULT_I0_PCT
+    src.setdefault("z_pct", ILLUSTRATIVE if z_pct == 4.5 else "given")
+    src.setdefault("i0_pct", ILLUSTRATIVE if i0_pct == 2.0 else "given")
 
     z_base = v1 ** 2 / s_ph
     req = (p_cu_w / ph) / i1 ** 2

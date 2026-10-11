@@ -56,6 +56,11 @@ class Nameplate:
 
     notes: str = ""
 
+    # ---- calibration from a factory test report (dtwin/calibrate) ------------
+    # None unless a report is applied. When set, circuit.from_nameplate reads
+    # losses, impedance and no-load current from here instead of its defaults.
+    test_data: dict = None
+
     # ---- derived ------------------------------------------------------------
     @property
     def rated_current_a(self) -> float:
