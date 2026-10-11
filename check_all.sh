@@ -20,6 +20,7 @@ run time-term python check_time_term.py
 [ -f check_calibration.py ] && run calibration python check_calibration.py
 [ -f check_explain.py ] && run explain python check_explain.py
 [ -f check_breather.py ] && run breather python check_breather.py
+[ -f check_whatif.py ] && run whatif python check_whatif.py
 tmp="$(mktemp)"; python evaluate.py --set heldout > "$tmp" 2>&1
 if diff -q "$tmp" results/heldout_detector_370b0b3.txt >/dev/null; then
   printf "  %-14s %s\n" "held-out" "byte-identical to results/heldout_detector_370b0b3.txt"

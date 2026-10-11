@@ -3,6 +3,8 @@ import { CartesianGrid, Legend, Line, LineChart, ReferenceLine, ResponsiveContai
 import Schematic from "./Schematic.jsx";
 import { FemCompare } from "./HeatMap.jsx";
 import { webglAvailable } from "./states.js";
+import { CONDITIONS, setSilica, useSilica } from "./silica.jsx";
+import { Badge } from "../overview/Explain.jsx";
 
 const Scene = lazy(() => import("./Scene.jsx"));
 
@@ -47,6 +49,56 @@ function Compare({ r, k, label, unit, limit }) {
   );
 }
 
+// Input change -> equation -> intermediate values -> outputs. Every number is
+// taken from the backend's baseline and simulated points; only differences of
+// backend values are formed here, no physics is computed.
+function Chain({ r, silica }) {
+  const b = r.baseline.point, s = r.simulated.point, bi = r.inputs.baseline, si = r.inputs.simulated;
+  const rise = (p, i) => (p.steady_top_oil_c === null || p.steady_top_oil_c === undefined ? null : p.steady_top_oil_c - i.ambient_c);
+  const grad = (p) => p.steady_hotspot_c - p.steady_top_oil_c;
+  const rows = [
+    ["Load", "% of rated", bi.load_pct, si.load_pct, 1, "input"],
+    ["Copper loss", "W", b.p_cu_w, s.p_cu_w, 0, "P = I²R, resistance from the equivalent circuit"],
+    ["Core loss", "W", b.p_core_w, s.p_core_w, 0, "P = V²/Rc, from the applied voltage"],
+    ["Loss ratio to rated", "pu", b.loss_ratio, s.loss_ratio, 3, "(Pcu + Pcore) / (Pcu,R + Pcore,R)"],
+    ["Rth multiplier (cooling factor)", "x", b.cooling_factor, s.cooling_factor, 3, "1 / effectiveness: the oil rise scales with Rth"],
+    ["Steady top-oil rise", "K", rise(b, bi), rise(s, si), 1, "cooling factor × rise at rated × loss ratio^n"],
+    ["Steady winding gradient", "K", grad(b), grad(s), 1, "gradient at rated × (worst-phase Pcu ratio)^m"],
+    ["Ambient", "°C", bi.ambient_c, si.ambient_c, 1, "input"],
+    ["Steady hot-spot", "°C", b.steady_hotspot_c, s.steady_hotspot_c, 1, "ambient + oil rise + gradient"],
+    ["Ageing factor F_AA", "pu", b.steady_faa, s.steady_faa, 2, "exp(15000/383 − 15000/(θ + 273))"],
+    ["Life cost", "₹/day", b.life_cost_inr_per_day, s.life_cost_inr_per_day, 0, "F_AA × cost per hour of life × 24"],
+  ];
+  return (
+    <>
+      <table className="w-full text-xs tabular-nums">
+        <thead><tr className="text-dim text-left"><th className="font-normal">Step</th>
+          <th className="font-normal text-right">Baseline</th><th className="font-normal text-right">Simulated</th></tr></thead>
+        <tbody>
+          {rows.map(([lab, u, x, y, d, how]) => (
+            <tr key={lab} className="border-t border-edge align-top">
+              <td className="py-0.5 pr-1">{lab} <span className="text-dim">{u}</span><div className="text-dim">{how}</div></td>
+              <td className="text-right">{fmt(x, d)}</td>
+              <td className={`text-right ${x !== y ? "text-accent font-semibold" : ""}`}>{fmt(y, d)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="mt-3 text-xs">
+        <div className="font-semibold">Moisture pathway (separate from the thermal chain)</div>
+        {silica.rec ? silica.rec.chain.map((c) => (
+          <div key={c.key} className="flex justify-between gap-2 border-t border-edge py-0.5">
+            <span>{c.label}</span>
+            <span className="text-right">{c.value} <Badge p={c.kind} /></span>
+          </div>
+        )) : <span className="text-dim">Loading…</span>}
+        <p className="text-dim mt-1">The gel setting changes only this pathway. Hot-spot, top oil and ageing above are
+          computed from load, ambient and cooling and do not change with it.</p>
+      </div>
+    </>
+  );
+}
+
 export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
   const [inputs, setInputs] = useState(null);       // edits on top of the baseline
   const [r, setR] = useState(null);
@@ -54,6 +106,9 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
   const [xray, setXray] = useState(true);
   const [err, setErr] = useState(null);
   const gl = useMemo(() => webglAvailable(), []);
+  const silica = useSilica();
+  const silica0 = useRef(silica.condition);       // the baseline copy keeps the condition it opened with
+  useEffect(() => () => setSilica(silica0.current), []);   // leaving the what-if never changes the observed view
   const timer = useRef(null);
   const [heat, setHeat] = useState(false);
   const [femR, setFemR] = useState(null);
@@ -89,7 +144,7 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
         <span className="text-sm">Isolated copy of the observed state at <b className="tabular-nums">{r.baseline_timestamp.replace("T", " ")}</b>.
           Observed data are not changed.</span>
         <div className="ml-auto flex gap-2">
-          <button className="twin-btn" onClick={() => { setInputs({}); }}>Reset to baseline</button>
+          <button className="twin-btn" onClick={() => { setInputs({}); setSilica(silica0.current); }}>Reset to baseline</button>
           <button className="twin-btn twin-btn-primary" onClick={onExit}>Exit simulation</button>
         </div>
       </header>
@@ -107,6 +162,31 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
                 <div className="text-dim tabular-nums">baseline {fmt(base[k], s.step < 0.1 ? 2 : 1)}</div>
               </label>
             ))}
+            <label className="block text-xs mb-3">
+              <div className="flex justify-between">
+                <span className={Math.abs(sim.cooling_effectiveness - base.cooling_effectiveness) > 1e-9 ? "text-accent" : ""}>
+                  Thermal resistance Rth</span>
+                <span className="tabular-nums">{fmt(1 / sim.cooling_effectiveness, 2)} x design</span>
+              </div>
+              <input type="range" min={0.85} max={2} step={0.05} aria-label="Thermal resistance multiplier"
+                value={Math.min(2, Math.max(0.85, 1 / sim.cooling_effectiveness))} className="w-full"
+                onChange={(e) => set("cooling_effectiveness", 1 / Number(e.target.value))} />
+              <div className="text-dim">baseline {fmt(1 / base.cooling_effectiveness, 2)} x design. The reciprocal of
+                cooling effectiveness above: the same input shown the other way round.</div>
+            </label>
+            <label className="block text-xs mb-1">
+              <div className="flex justify-between"><span>Silica-gel condition</span><Badge p="ASSUMED" /></div>
+              <select value={silica.condition} onChange={(e) => setSilica(e.target.value)}
+                aria-label="Simulated silica-gel condition" className="twin-btn w-full mt-1">
+                {CONDITIONS.map((k) => (
+                  <option key={k} value={k}>{{ unknown: "Unknown", effective: "Effective", partial: "Partially exhausted", saturated: "Saturated" }[k]}</option>
+                ))}
+              </select>
+              <div className="text-dim">Scenario, not a measurement. Affects the moisture pathway only.</div>
+            </label>
+          </Section>
+          <Section title="Calculation chain">
+            <Chain r={r} silica={silica} />
           </Section>
           <Section title="Illustrative parameters">
             <p className="text-xs text-dim">No test data for this unit, so these are typical values and editable above:
@@ -135,7 +215,7 @@ export default function SimulateWorkspace({ scen, cursor, timestamp, onExit }) {
           {heat ? <FemCompare res={femR} /> : gl ? (
             <Suspense fallback={<div className="p-6 text-dim text-sm">Loading 3D…</div>}>
               <Scene comps={comps} scale={r.components.scale} sel={sel} setSel={setSel} xray={xray} flyTo={null} resetKey={0}
-                theme={document.documentElement.dataset.theme} />
+                theme={document.documentElement.dataset.theme} silica={silica} />
             </Suspense>
           ) : <Schematic comps={comps} scale={r.components.scale} sel={sel} setSel={setSel} />}
           {c && (
