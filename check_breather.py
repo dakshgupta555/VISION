@@ -84,5 +84,5 @@ focus = (ROOT / "dashboard" / "src" / "twin" / "focus.js").read_text()
 check("6 breather part in components.yaml and the focus table", "breather" in ids and "breather:" in focus)
 
 check("7 no quantitative coupling by default", not any("coupling" in k for k in B.config()))
-print(f"\n{sum(results)}/{len(results)} passed")
+print(f"\n{sum(results)} of {len(results)} checks passed")
 sys.exit(0 if all(results) else 1)

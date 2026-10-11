@@ -67,5 +67,5 @@ check("6 observed /state untouched by a what-if", j(A.state("showcase", str(i)))
 
 check("7 silica gel is not a simulation input", "silica" not in " ".join(S.INPUTS) and
       all(math.isfinite(v) for v in [base["steady_hotspot_c"]]))
-print(f"\n{sum(results)}/{len(results)} passed")
+print(f"\n{sum(results)} of {len(results)} checks passed")
 sys.exit(0 if all(results) else 1)
