@@ -29,6 +29,9 @@ currents, three phase voltages, top-oil and ambient temperature. Nothing else.
     python -m dtwin.live                           # optional live stream, 120x real time
     ./check_all.sh                                 # every regression suite, one line each
 
+    python -m dtwin.calibrate reports/sample_100kva_ILLUSTRATIVE.yaml --show   # calibrate from a test report
+    python check_calibration.py                    # default byte-identical; round trip; formulas (docs/methodology.md 11)
+
 ## Network dashboard (separate app, `docs/network.md`)
 
 A district of transformers on a simulated LoRaWAN network, a geospatial Map

@@ -43,7 +43,9 @@ def analyse(samples: pd.DataFrame, rating_kva: float, source: str, tag: str = "D
     """The existing engine on a buffer of samples. Takes samples and the
     nameplate only: it cannot see what, if anything, was injected."""
     from ..api.engine import Twin
-    np_ = preset(rating_kva)
+    from .. import calibrate
+    cal = calibrate.active()          # a test report applied in the dashboard, for this rating only
+    np_ = cal.nameplate() if cal is not None and cal.params["rating_kva"]["value"] == rating_kva else preset(rating_kva)
     np_.tag = tag
     absent = [c for c in CHANNELS if samples[c].isna().all()]
     rows, _, _ = validate(samples, np_, absent=absent)

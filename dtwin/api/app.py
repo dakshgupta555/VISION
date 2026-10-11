@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .engine import get_twin, scenarios, selftest
+from .. import calibrate
 from ..live.store import SESSION as _LIVE_SESSION
 from ..physics.nameplate import IS_1180_RATINGS
 
@@ -72,13 +73,94 @@ def _twin(name, kva=None):
         return STORE.twin
     if name not in scenarios():
         raise HTTPException(404, f"unknown scenario {name!r}")
-    return get_twin(name, kva)
+    cal = calibrate.active()
+    if cal is None:
+        return get_twin(name, kva)
+    try:                                                 # a report applies to every file it matches
+        return get_twin(name, kva, calibration=cal)
+    except calibrate.ReportError as e:
+        raise HTTPException(409, f"the applied test report does not fit {name}: {e}. Reset it or apply another.")
 
 
 def _cursor(t: Optional[str]) -> Union[int, str, None]:
     if t is None or t == "":
         return None
     return int(t) if t.lstrip("-").isdigit() else t
+
+
+# --------------------------------------------------------------- calibration
+# One factory test report may be applied at a time; it calibrates every twin
+# the API builds until it is reset. With none applied every answer is the
+# built-in twin, byte for byte (check_calibration.py).
+def _report_from(body):
+    if not isinstance(body, dict):
+        raise HTTPException(422, "body must be a JSON object: {report} or {text}")
+    if body.get("text") is not None:
+        try:
+            return calibrate.parse_text(str(body["text"]))
+        except calibrate.ReportError as e:
+            raise HTTPException(422, str(e))
+    return body.get("report")
+
+
+async def _json(request):
+    try:
+        return await request.json()
+    except ValueError:
+        raise HTTPException(422, "body is not JSON")
+
+
+@app.get("/api/calibration")
+def calibration_status():
+    cal = calibrate.active()
+    return {"active": cal is not None, **({"result": cal.as_json(), "report": cal.report} if cal else {})}
+
+
+@app.get("/api/calibration/samples")
+def calibration_samples():
+    out = []
+    for label, p in calibrate.SAMPLES.items():
+        out.append({"label": label, "file": p.name, "text": p.read_text(), "report": calibrate.load(p)})
+    return {"samples": out, "builtin": calibrate.builtin_report(),
+            "model_reference_temp_c": calibrate.MODEL_REF_TEMP_C}
+
+
+@app.post("/api/calibration/preview")
+async def calibration_preview(request: Request):
+    """Calibrate without applying: the table and checks for a report."""
+    try:
+        return calibrate.Calibration(_report_from(await _json(request))).as_json()
+    except calibrate.ReportError as e:
+        raise HTTPException(422, str(e))
+
+
+@app.post("/api/calibration")
+async def calibration_apply(request: Request):
+    """Apply a report. With {"scenario": name} it is first checked against that
+    data file (voltages must match) and the twin is built once to prove it."""
+    body = await _json(request)
+    try:
+        cal = calibrate.Calibration(_report_from(body))
+    except calibrate.ReportError as e:
+        raise HTTPException(422, str(e))
+    scen = body.get("scenario")
+    if scen and scen != "live":
+        if scen not in scenarios():
+            raise HTTPException(404, f"unknown scenario {scen!r}")
+        try:
+            get_twin(scen, None, calibration=cal)
+        except calibrate.ReportError as e:
+            raise HTTPException(422, str(e))
+    calibrate.apply(cal)
+    _DISPATCHERS.clear()
+    return {"active": True, "result": cal.as_json()}
+
+
+@app.delete("/api/calibration")
+def calibration_reset():
+    calibrate.reset()
+    _DISPATCHERS.clear()
+    return {"active": False}
 
 
 @app.get("/api/scenarios")
@@ -147,7 +229,8 @@ def _dispatcher(name, kva):
     if name == "live":                       # the live twin changes every sample: never cached
         from ..live import notify as live_notify
         return live_notify.dispatcher(_twin(name))
-    key = (name, kva)
+    cal = calibrate.active()
+    key = (name, kva) if cal is None else (name, kva, cal.key)
     if key not in _DISPATCHERS:
         from ..notify.dispatch import Dispatcher
         _DISPATCHERS[key] = Dispatcher(_twin(name, kva), mode="replay")
