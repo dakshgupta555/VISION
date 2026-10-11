@@ -376,6 +376,17 @@ def agents_route(name: str, t: Optional[str] = None, kva: Optional[float] = None
     return run_agents(tw, tw.locate(_cursor(t)), fresh)
 
 
+@app.get("/api/{name}/explain/{metric}")
+def explain_route(name: str, metric: str, t: Optional[str] = None, kva: Optional[float] = None):
+    """Calculation trace behind one Overview tile: equation, substituted
+    values, model sweep, sensitivity, provenance. Read-only."""
+    from ..twin.explain import METRICS, explain
+    if metric not in METRICS:
+        raise HTTPException(404, f"unknown metric {metric!r}; one of {', '.join(METRICS)}")
+    tw = _twin(name, kva)
+    return explain(tw, tw.locate(_cursor(t)), metric)
+
+
 @app.get("/api/{name}/alerts")
 def alerts(name: str):
     from .engine import _alert_json

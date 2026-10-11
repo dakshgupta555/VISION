@@ -14,6 +14,7 @@ import { FOCUS } from "../twin/focus.js";
 import { webglAvailable } from "../twin/states.js";
 import Schematic from "../twin/Schematic.jsx";
 import HeatMapView from "../twin/HeatMap.jsx";
+import { Explainable } from "./Explain.jsx";
 
 const Scene = lazy(() => import("../twin/Scene.jsx"));
 const TONE_TEXT = { ok: "text-ok", warn: "text-warn", alarm: "text-alarm", sensor: "text-sensor", info: "text-dim" };
@@ -350,15 +351,15 @@ function LimitBar({ value, lim, inverse = false }) {
   );
 }
 
-function KeyNumber({ label, tech, value, unit, d = 0, lim, inverse, help, suspect, caption, note }) {
+function KeyNumber({ label, tech, value, unit, d = 0, lim, inverse, help, suspect, caption, note, ex }) {
   const v = value === null || value === undefined ? null : Number(value);
   const lv = v === null ? null : inverse
     ? (v < lim.alarm_below ? "alarm" : v < lim.warn_below ? "warn" : "ok")
     : (v >= lim.alarm ? "alarm" : v >= lim.warn ? "warn" : "ok");
   const word = suspect ? "Suspect reading" : { ok: "Normal", warn: "Warning", alarm: "Alarm" }[lv] || "No data";
   const tone = suspect ? "sensor" : lv || "info";
-  return (
-    <Card pad="p-5" className={lv && lv !== "ok" && !suspect ? `border-2 ${TONE_BORDER[lv]}` : suspect ? "border-2 border-sensor" : ""}>
+  const card = (
+    <Card pad="p-5 pb-9" className={lv && lv !== "ok" && !suspect ? `border-2 ${TONE_BORDER[lv]}` : suspect ? "border-2 border-sensor" : ""}>
       <div className="flex items-start justify-between gap-2">
         <Term tech={tech}><span className="text-[15px] text-dim">{label}</span></Term>
         <Help text={help} title={label} />
@@ -374,25 +375,27 @@ function KeyNumber({ label, tech, value, unit, d = 0, lim, inverse, help, suspec
       <LimitBar value={v} lim={lim} inverse={inverse} />
     </Card>
   );
+  return ex ? <Explainable {...ex} title={label.toLowerCase()}>{card}</Explainable> : card;
 }
 
-function KeyNumbers({ s }) {
+function KeyNumbers({ s, ctx }) {
   const L = s.display_limits;
   const r = s.readings;
   const sus = suspectSet(s);
   const oilSus = sus.has("oil_temp") || s.status.thermal_status === "sensor_temp_offset";
   const curSus = ["IR", "IY", "IB"].some((c) => sus.has(c));
+  const ex = (metric) => ({ scen: ctx.scenKey, t: s.i, kva: ctx.kva, metric });
   return (
     <div className="grid grid-cols-2 gap-4">
       <KeyNumber label="Hot-spot temperature" tech="Winding hot-spot, IEEE C57.91" value={r.hotspot_c} unit="°C" d={0}
-        lim={L.hotspot_c} help={HELP.hotspot(L.hotspot_c)} suspect={oilSus} caption={`limit ${L.hotspot_c.limit} °C`}
+        lim={L.hotspot_c} help={HELP.hotspot(L.hotspot_c)} suspect={oilSus} caption={`limit ${L.hotspot_c.limit} °C`} ex={ex("hotspot")}
         note={s.physical_limit?.beyond && !oilSus ? `Above the ${s.physical_limit.emergency_hotspot_c} °C limit` : null} />
       <KeyNumber label="Load" tech="Load ratio K, RMS of three phases" value={r.load_pct} unit="% of rating" lim={L.load_pct}
-        help={HELP.load(L.load_pct, s.nameplate.rated_current_a)} suspect={curSus} />
+        help={HELP.load(L.load_pct, s.nameplate.rated_current_a)} suspect={curSus} ex={ex("load")} />
       <KeyNumber label="Top-oil temperature" tech="Top oil, measured by the oil probe" value={r.oil_c} unit="°C" d={0}
-        lim={L.top_oil_c} help={HELP.topoil(L.top_oil_c)} suspect={oilSus} />
+        lim={L.top_oil_c} help={HELP.topoil(L.top_oil_c)} suspect={oilSus} ex={ex("top_oil")} />
       <KeyNumber label="Health index" tech="Weighted health index, 0-100" value={s.health.index} unit="of 100" lim={L.health} inverse
-        help={HELP.health(s.health.components, L.health)} />
+        help={HELP.health(s.health.components, L.health)} ex={ex("health")} />
     </div>
   );
 }
@@ -555,7 +558,7 @@ export default function Overview({ ctx, series, onSimulate }) {
         <div className="min-h-[460px]"><TwinPanel ctx={ctx} onSimulate={onSimulate} /></div>
         <div className="space-y-6">
           <Whats s={s} stale={stale} />
-          <KeyNumbers s={s} />
+          <KeyNumbers s={s} ctx={ctx} />
         </div>
       </div>
       <Trends series={series} limits={s.display_limits} prewarmUntil={mode === "live" ? live.status?.prewarm_until : null} />
