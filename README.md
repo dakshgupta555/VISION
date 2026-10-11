@@ -22,15 +22,31 @@ currents, three phase voltages, top-oil and ambient temperature. Nothing else.
 
 ## Run
 
+Needs Python 3.13 (tested) and Node 22 (tested). Live-mode data is simulated by the physics model.
+
+Once, from the repo root:
+
+    python3 -m venv .venv
+    source .venv/bin/activate
     pip install -r requirements.txt
-    uvicorn dtwin.api.app:app --port 8000          # backend, from the repo root
-    cd dashboard && npm install && npx vite        # http://localhost:5173
 
-    python -m dtwin.live                           # optional live stream, 120x real time
-    ./check_all.sh                                 # every regression suite, one line each
+Terminal 1, backend (repo root, venv active):
 
-    python -m dtwin.calibrate reports/sample_100kva_ILLUSTRATIVE.yaml --show   # calibrate from a test report
-    python check_calibration.py                    # default byte-identical; round trip; formulas (docs/methodology.md 11)
+    uvicorn dtwin.api.app:app --port 8000
+
+Terminal 2, dashboard (`dashboard/` folder):
+
+    cd dashboard
+    npm install
+    npx vite                                       # http://localhost:5173
+
+Terminal 3, optional live stream (repo root, venv active):
+
+    python -m dtwin.live                           # 120x real time
+
+Regression suites (repo root, venv active):
+
+    ./check_all.sh                                 # every suite, one line each
 
 ## Network dashboard (separate app, `docs/network.md`)
 
